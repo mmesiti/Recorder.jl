@@ -1,0 +1,7 @@
+name = "Recorder"
+uuid = "c5f2e5b5-9010-42ac-aa93-6ef73b86c405"
+authors = ["Michele Mesiti <michele.mesiti@kit.edu>"]
+version = "0.1.0"
+
+[deps]
+Serialization = "9e88b42a-f829-5b0c-bbe9-9e923198166b"
