@@ -9,8 +9,30 @@ export @record,
 
 import Serialization
 
+return_values = Dict{String,Vector{Any}}()
+argumentss = Dict{String,Vector{Any}}()
+argumentss_post = Dict{String,Vector{Any}}()
+call_number = Dict{String,Int32}()
 
-function _record_expr(expr, key)
+
+
+function _add_getkey!(expr, res)
+    args = expr.args[2:end]
+    # get module_implementing, and key
+    argtypes = :(())
+    for arg in args
+        push!(argtypes.args, :(typeof($(esc(arg)))))
+    end
+    push!(res.args, :(argtypes = $argtypes))
+    push!(res.args, :(method = which($(esc(expr.args[1])), argtypes)))
+    push!(res.args, :(module_implementing = method.module))
+    push!(res.args, :(name = method.name))
+    push!(res.args, :(key = replace(string(module_implementing) * "." * string(name),
+        r"^Main\." => s"")))
+end
+
+
+function _record_expr(expr)
     args = expr.args[2:end]
 
     # Start assembling macro
@@ -18,59 +40,61 @@ function _record_expr(expr, key)
         args_input = []
         args_output = []
     end
+    _add_getkey!(expr, res)
 
     # process each argument pre-call
     for arg in args
-        push!(res.args, :(push!(args_input, deepcopy(eval($(esc(arg)))))))
+        push!(res.args, :(push!(args_input, deepcopy($(esc(arg))))))
     end
 
     # record argument list in global dictionary
-    push!(res.args, :(record_arguments($key, args_input)))
+    push!(res.args, :(record_arguments(key, args_input)))
 
     # evaluate function
     push!(res.args, :(output = $(esc(expr))))
-    push!(res.args, :(record_return_values($key, deepcopy(output))))
+    push!(res.args, :(record_return_values(key, deepcopy(output))))
     # increase call_number
-    push!(res.args, :(increase_call_no($key)))
+    push!(res.args, :(increase_call_no(key)))
 
     # process each argument post evaluation
     for arg in args
-        push!(res.args, :(push!(args_output, deepcopy(eval($(esc(arg)))))))
-
+        push!(res.args, :(push!(args_output, deepcopy($(esc(arg))))))
     end
 
     # record argument list in global dictionary (post evaluation)
-    push!(res.args, :(record_arguments_post($key, args_output)))
+    push!(res.args, :(record_arguments_post(key, args_output)))
 
     # leaving output at the end as the expression value
     push!(res.args, :(output))
     res
 end
 
-function _no_record_expr(expr, key)
-    quote
-        increase_call_no($key)
-        $(esc(expr))
-    end
+function _no_record_expr(expr)
+    res = quote end
+    _add_getkey!(expr, res)
+    push!(res.args, :(increase_call_no(key)))
+    push!(res.args, :($(esc(expr))))
+    res
 end
 
 macro record(expr)
-    key = string(expr.args[1])
-    _record_expr(expr, key)
+    _record_expr(expr)
 end
 
 macro record(record_range, expr)
-    key = string(expr.args[1])
+    res = quote end
+    _add_getkey!(expr, res)
 
-    condition = :(get_call_no($key) + 1 in $record_range)
+    condition = :(get_call_no(key) + 1 in $record_range)
 
-    res = :(
+    ifblock = :(
         if $condition
         else
         end
     )
-    res.args[2] = _record_expr(expr, key)
-    res.args[3] = _no_record_expr(expr, key)
+    ifblock.args[2] = _record_expr(expr)
+    ifblock.args[3] = _no_record_expr(expr)
+    push!(res.args, ifblock)
     res
 end
 
@@ -79,39 +103,37 @@ argumentss = Dict{String,Vector{Any}}()
 argumentss_post = Dict{String,Vector{Any}}()
 call_number = Dict{String,Int32}()
 
-
-function get_return_value(fname)
-    return_values[fname]
+function get_return_value(key)
+    return_values[key]
 end
 
-function get_arguments(fname)
-    argumentss[fname]
+function get_arguments(key)
+    argumentss[key]
 end
 
-function get_arguments_post(fname)
-    argumentss_post[fname]
+function get_arguments_post(key)
+    argumentss_post[key]
 end
 
-function record_arguments(fname, args_input)
-    if !haskey(argumentss, fname)
-        argumentss[fname] = []
+function record_arguments(key, args_input)
+    if !haskey(argumentss, key)
+        argumentss[key] = []
     end
-    push!(argumentss[fname], args_input)
+    push!(argumentss[key], args_input)
 end
 
-function record_return_values(fname, return_value)
-    if !haskey(return_values, fname)
-        return_values[fname] = []
+function record_return_values(key, return_value)
+    if !haskey(return_values, key)
+        return_values[key] = []
     end
-    push!(return_values[fname], return_value)
+    push!(return_values[key], return_value)
 end
 
-
-function record_arguments_post(fname, args_output)
-    if !haskey(argumentss_post, fname)
-        argumentss_post[fname] = []
+function record_arguments_post(key, args_output)
+    if !haskey(argumentss_post, key)
+        argumentss_post[key] = []
     end
-    push!(argumentss_post[fname], args_output)
+    push!(argumentss_post[key], args_output)
 end
 
 function clear()
@@ -127,25 +149,25 @@ function clear()
     nothing
 end
 
-function get_call_no(fname)
-    if !haskey(call_number, fname)
-        call_number[fname] = 0
+function get_call_no(key)
+    if !haskey(call_number, key)
+        call_number[key] = 0
     end
-    call_number[fname]
+    call_number[key]
 end
 
-function increase_call_no(fname)
-    if !haskey(call_number, fname)
-        call_number[fname] = 0
+function increase_call_no(key)
+    if !haskey(call_number, key)
+        call_number[key] = 0
     end
-    call_number[fname] += 1
+    call_number[key] += 1
 end
 
-function create_regression_tests_data(fname)
-    return_value = return_values[fname]
-    argument = argumentss[fname]
-    argument_post = argumentss_post[fname]
-    output_filename = "regression_tests_$fname.data"
+function create_regression_tests_data(key, namestem)
+    return_value = return_values[key]
+    argument = argumentss[key]
+    argument_post = argumentss_post[key]
+    output_filename = "regression_tests_$namestem.data"
 
     data = Dict("return_value" => return_value,
         "arguments" => argument,
@@ -156,30 +178,41 @@ function create_regression_tests_data(fname)
 
 end
 
-function create_regression_tests(fname)
-    output_filename = create_regression_tests_data(fname)
-    script_filename = "regression_tests_$fname.jl"
+function create_regression_tests(key, namestem=key)
+    output_filename = create_regression_tests_data(key, namestem)
+    script_filename = "regression_tests_$namestem.jl"
+
+    fname = split(key, ".")[end]
+    modhierarchstr = join(split(key, ".")[1:end-1], ".")
+
+    testsetname = "Tests for $fname"
     filecontentexpr = quote
         using Test
         using Serialization
         data = deserialize($output_filename)
-        @testset for (return_value,
-            arguments,
-            arguments_post) in zip(data["return_value"],
-            data["arguments"],
-            data["arguments_post"])
-            return_value == $(Symbol(fname))(arguments...) &&
-                arguments == arguments_post
+        @testset verbose = true $testsetname begin
+            @testset for (return_value,
+                arguments,
+                arguments_post) in zip(data["return_value"],
+                data["arguments"],
+                data["arguments_post"])
+                return_value == $(Symbol(fname))(arguments...) &&
+                    arguments == arguments_post
+            end
         end
     end
     sbuffer = IOBuffer()
+    println(sbuffer, "using $modhierarchstr")
     for line in filecontentexpr.args
         if typeof(line) != LineNumberNode
             println(sbuffer, line)
         end
     end
-    text = take!(sbuffer) |> String
-    text = replace(text, r"#=.*=#\s*" => "")
+    text = sbuffer |>
+           take! |>
+           String |>
+           (t -> replace(t, r"#=.*=#\s*" => ""))
+    #text = replace(text, r"#=.*=#\s*" => "")
     script_file = open(script_filename, "w")
     write(script_file, text)
     close(script_file)
