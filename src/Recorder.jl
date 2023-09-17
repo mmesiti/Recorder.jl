@@ -190,14 +190,23 @@ function create_regression_tests(key, namestem=key)
         using Test
         using Serialization
         data = deserialize($output_filename)
+        "You might need to modify this function!"
+        function compare_return_values(rvexp, rv)
+            rvexp == rv
+        end
+        "You might need to modify this function!"
+        function compare_arguments_post(args_post_exp, arg_post)
+            arg_post_exp == arg_post
+        end
+
         @testset verbose = true $testsetname begin
             @testset for (return_value,
                 arguments,
                 arguments_post) in zip(data["return_value"],
                 data["arguments"],
                 data["arguments_post"])
-                return_value == $(Symbol(fname))(arguments...) &&
-                    arguments == arguments_post
+                compare_retulrn_values(return_value, $(Symbol(fname))(arguments...)) &&
+                    compare_arguments_post(arguments, arguments_post)
             end
         end
     end

@@ -39,7 +39,10 @@ create_regression_tests("MyModule.myfunc")
 a script that contains a `@testset` of regression tests
 plus a file that contains the data for the regression tests
 is added.  
+
 The script itself might need some slight modifications.
+In particular, if the functions you are recording act on struct types, 
+the naive equality used in the tests will not work.
 
 Have I already said, it's WIP?
 
