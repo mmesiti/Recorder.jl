@@ -189,8 +189,8 @@ function create_regression_tests(key, namestem=key)
                 return_value = data["return_value"][i]
                 arguments = data["arguments"][i]
                 arguments_post = data["arguments_post"][i]
-                compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
-                    compare_arguments_post(arguments, arguments_post)
+                @test compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
+                      compare_arguments_post(arguments, arguments_post)
             end
         end
     end

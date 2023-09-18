@@ -174,7 +174,8 @@ using .TestModule
                 occursin("using Test", filestring) &&
                     occursin("using Serialization", filestring) &&
                     occursin("@testset for i", filestring) &&
-                    occursin("Base.identity", filestring)
+                    occursin("Base.identity", filestring) &&
+                    occursin("@test ", filestring)
             end
         end
     end
