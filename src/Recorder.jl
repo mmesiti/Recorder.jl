@@ -200,11 +200,10 @@ function create_regression_tests(key, namestem=key)
         end
 
         @testset verbose = true $testsetname begin
-            @testset for (return_value,
-                arguments,
-                arguments_post) in zip(data["return_value"],
-                data["arguments"],
-                data["arguments_post"])
+            @testset for i in 1:length(data["return_value"])
+                return_value = data["return_value"][i]
+                arguments = data["arguments"][i]
+                arguments_post = data["arguments_post"][i]
                 compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
                     compare_arguments_post(arguments, arguments_post)
             end
