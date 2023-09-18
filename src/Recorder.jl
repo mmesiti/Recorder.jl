@@ -205,7 +205,7 @@ function create_regression_tests(key, namestem=key)
                 arguments_post) in zip(data["return_value"],
                 data["arguments"],
                 data["arguments_post"])
-                compare_retulrn_values(return_value, $(Symbol(fname))(arguments...)) &&
+                compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
                     compare_arguments_post(arguments, arguments_post)
             end
         end
