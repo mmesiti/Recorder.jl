@@ -1,9 +1,6 @@
 module Recorder
 using Base: remove_linenums!
 export @record,
-    get_return_value,
-    get_arguments,
-    get_arguments_post,
     clear,
     create_regression_tests
 
@@ -102,18 +99,6 @@ return_values = Dict{String,Vector{Any}}()
 argumentss = Dict{String,Vector{Any}}()
 argumentss_post = Dict{String,Vector{Any}}()
 call_number = Dict{String,Int32}()
-
-function get_return_value(key)
-    return_values[key]
-end
-
-function get_arguments(key)
-    argumentss[key]
-end
-
-function get_arguments_post(key)
-    argumentss_post[key]
-end
 
 function record_arguments(key, args_input)
     if !haskey(argumentss, key)

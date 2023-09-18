@@ -18,12 +18,12 @@ using .TestModule
         @test begin
             clear()
             @record f3arg(4, 5, 6)
-            get_return_value("TestModule.f3arg") |> last == f3arg(4, 5, 6)
+            Recorder.return_values["TestModule.f3arg"] |> last == f3arg(4, 5, 6)
         end
         @test begin
             clear()
             @record TestModule1.f(4, 5, 6)
-            get_return_value("TestModule1.f") |> last == TestModule1.f(4, 5, 6)
+            Recorder.return_values["TestModule1.f"] |> last == TestModule1.f(4, 5, 6)
         end
     end
 
@@ -31,12 +31,12 @@ using .TestModule
         @test begin
             clear()
             @record f3arg(4, 5, 6)
-            get_arguments("TestModule.f3arg") |> last == [4, 5, 6]
+            Recorder.argumentss["TestModule.f3arg"] |> last == [4, 5, 6]
         end
         @test begin
             clear()
             @record TestModule1.f(4, 5, 6)
-            get_arguments("TestModule1.f") |> last == [4, 5, 6]
+            Recorder.argumentss["TestModule1.f"] |> last == [4, 5, 6]
         end
     end
 
@@ -45,8 +45,8 @@ using .TestModule
             v = [1, 2, 3]
             clear()
             @record push!(v, 4)
-            get_arguments("Base.push!") |> last == [[1, 2, 3], 4] &&
-                get_arguments_post("Base.push!") |> last == [[1, 2, 3, 4], 4]
+            Recorder.argumentss["Base.push!"] |> last == [[1, 2, 3], 4] &&
+                Recorder.argumentss_post["Base.push!"] |> last == [[1, 2, 3, 4], 4]
         end
     end
 
@@ -91,7 +91,7 @@ using .TestModule
                 @record 3:2:7 identity(i)
             end
             try
-                get_arguments("Base.identity") == [[3], [5], [7]]
+                Recorder.argumentss["Base.identity"] == [[3], [5], [7]]
             catch
                 println(Recorder.return_values)
                 false
@@ -173,7 +173,7 @@ using .TestModule
                 filestring = String(take!(io))
                 occursin("using Test", filestring) &&
                     occursin("using Serialization", filestring) &&
-                    occursin("@testset for (", filestring) &&
+                    occursin("@testset for i", filestring) &&
                     occursin("Base.identity", filestring)
             end
         end
