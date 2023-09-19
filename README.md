@@ -1,8 +1,37 @@
 # Recorder.jl
 
+**Disclaimer: This is almost my first Julia project,
+so do not take this as an example of good practices.**
+
 A library of utilities to conveniently record 
 the input and output of functions,
 to quickly create regression tests.
+
+## Rationale
+
+Very often in my experience it happens that one needs to optimise,
+refactor or parallelise code that does not have any tests,
+or at least tests that are useful in this regard.
+One might argue that such code *defines itself*,
+and if we so believe, 
+the correctness of a new version of the code 
+can be checked with regression tests 
+that check that, for given inputs, output and side effects 
+are the same as for the old code.
+
+Creating such tests is quite tedious. 
+One possibility is to record input, output 
+and side effects of the code we want to test
+while it is running
+(possibly only for a subset of the calls),
+and create a test harness based on these data.
+This requires a lot of boilerplate code for the recording
+and the serialization/deserialization 
+of the data.
+Fortunately, thanks to the macro system and the 
+`Serialization` library,
+it is quite trivial to do the recording in Julia
+(at least for serial code).
 
 ## Examples - WIP
 
@@ -28,7 +57,8 @@ myvar = @record myfunc(a,b,c)
 
 ```
 
-This will make record the input arguments, the output and the values of the arguments
+This will make record the input arguments, 
+the output and the values of the arguments
 after the call.
 Then, with the function 
 
@@ -36,15 +66,22 @@ Then, with the function
 create_regression_tests("MyModule.myfunc")
 ```
 
-a script that contains a `@testset` of regression tests
-plus a file that contains the data for the regression tests
-is added.  
+one can create a file 
+that contains all the data for the regression test,
+plus a script that contains a `@testset` of regression tests
+based on that data.  
 
-The script itself might need some slight modifications.
-In particular, if the functions you are recording act on struct types, 
-the naive equality used in the tests will not work.
+The script itself might need some modifications.
+In particular:
+- if the functions you are recording act on struct types, 
+  one might have to define their own equality operator,
+  for example
+  - to compare the structure fields by value (recursively)
+  - to provide better diagnostics for failing tests
+    (where is the difference?)
+  - to use `isapprox` instead of `==`
+- to add `MPI` initialization/finalization calls if necessary;
 
-Have I already said, it's WIP?
 
 ## Possible features
   The crossed ones are somewhat tested but not yet thoroughly.
