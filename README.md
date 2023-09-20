@@ -20,7 +20,8 @@ that check that, for given inputs, output and side effects
 are the same as for the old code.
 
 Creating such tests is quite tedious. 
-One possibility is to record input, output 
+One possibility is to "instrument" the code 
+to record input, output 
 and side effects of the code we want to test
 while it is running
 (possibly only for a subset of the calls),
@@ -35,13 +36,21 @@ it is quite trivial to do the recording in Julia
 
 ## Examples - WIP
 
-You need to create a regression test for a function 
+Imagine you need to create a regression test for a function `func`
 which is called inside some julia code 
-*that you can temporarily modify:*
+*that you can temporarily modify*,
+and might be buried down a tall call stack
+or called in a loop:
+
 
 ```julia
 using MyModule
-myvar = myfunc(a,b,c)
+
+function deep_in_the_callstack_in_nested_loops_and_without_tests()
+    [...]
+    res = func(a,b,c)
+    [...]
+end
 ```
 
 Just use `Recorder` and slap `@record` in front of the function call:
@@ -49,24 +58,47 @@ Just use `Recorder` and slap `@record` in front of the function call:
 ``` julia
 using Recorder
 using MyModule
-[...]
 
-myvar = @record myfunc(a,b,c)
-
-[...]
+function deep_in_the_callstack_in_nested_loops_and_without_tests()
+    [...]
+    res = @record func(a,b,c)
+    [...]
+end
 
 ```
 
 This will make record the input arguments, 
 the output and the values of the arguments
-after the call.
+after the call.  
+In the case where the function we want to record 
+is buried deep into a call stack or in a loop,
+the input/output of  all `@record`ed call to `func` 
+will all be saved. This might be expensive. 
+To record only some calls, we can specify a range:
+
+``` julia
+using Recorder
+using MyModule
+
+function deep_in_the_callstack_in_nested_loops_and_without_tests()
+    [...]
+    res = @record 13:2:17 func(a,b,c)
+    [...]
+end
+```
+
+In this case, `@record` will keep track 
+of how many times we have called the function,
+and record only the calls in the range
+(in the example, the 13th, the 15th and the 17th).
+
 Then, with the function 
 
 ``` julia
-create_regression_tests("MyModule.myfunc")
+create_regression_tests("Module.func")
 ```
 
-one can create a file 
+a file can be created 
 that contains all the data for the regression test,
 plus a script that contains a `@testset` of regression tests
 based on that data.  
@@ -82,6 +114,9 @@ In particular:
   - to use `isapprox` instead of `==`
 - to add `MPI` initialization/finalization calls if necessary;
 
+After the regression tests have been created,
+you can remove all the references to `Recorder` from your code,
+and use the recorded data and the modified scripts in your test suite.
 
 ## Possible features
   The crossed ones are somewhat tested but not yet thoroughly.
@@ -100,6 +135,10 @@ In particular:
         these expressions are evaluated only once
   - [ ] makes sure that if expressions are passed as arguments,
         their value after the function is not evaluated again
+  - [ ] make it possible to "disable" `@record` (maybe with an environment variable?)
+        so that it can be left in the code without causing issues.
+  - [ ] `create_regression_tests` should error if the files are already there
+  - [ ] automatic value-based comparisons
 ## Impossible features
   Some of the features in the "Possible Features" list might move here.
   - monitor side effects of functions
