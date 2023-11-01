@@ -245,4 +245,22 @@ using .TestModule
             end
         end
     end
+
+    @testset "create_regression_test creates appropriate scripts" begin
+        text = setup_cleanup("A_Namestem") do
+            @record identity(5)
+            @record identity("hello")
+            create_regression_tests("Base.identity",namestem="A_Namestem")
+        end
+
+        @test contains(text, "using Base") # Module containing the identity function
+        @test contains(text, "using Test")
+        @test contains(text, "using Serialization")
+
+        @test contains(text,"@testset")
+        @test contains(text,"@test ")
+        @test contains(text,"function compare_return_values")
+        @test contains(text,"function compare_arguments_post")
+
+    end
 end

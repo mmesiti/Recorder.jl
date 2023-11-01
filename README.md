@@ -5,7 +5,7 @@ so do not take this as an example of good practices.**
 
 A library of utilities to conveniently record 
 the input and output of functions,
-to quickly create regression tests.
+to quickly create regression/approval/characterisation tests.
 
 ## Rationale
 
@@ -34,7 +34,8 @@ Fortunately, thanks to the macro system and the
 it is quite trivial to do the recording in Julia
 (at least for serial code).
 
-## Examples - WIP
+## Examples 
+### Basic usage
 
 Imagine you need to create a regression test for a function `func`
 which is called inside some julia code 
@@ -70,6 +71,41 @@ end
 This will make record the input arguments, 
 the output and the values of the arguments
 after the call.  
+
+Then, with the function 
+
+``` julia
+create_regression_tests("MyModule.func")
+```
+
+a file can be created 
+that contains all the data for the regression test,
+plus a script that contains a `@testset` of "skeleton" regression tests
+based on that data.  
+The script will need to be modified 
+for readability and to define proper equality conditions
+between the real return values and the expected return values 
+and between the real output argument values 
+and the expected output argument values.
+
+In particular:
+- if the functions you are recording act on struct types, 
+  one might have to define their own equality operator,
+  for example
+  - to compare the structure fields by value (recursively)
+  - to provide better diagnostics for failing tests
+    (where is the difference?)
+  - to use `isapprox` instead of `==`
+- In the case of MPI ports:
+  - to add `MPI` initialization/finalization calls if necessary;
+  - to add scatter/gather steps for the input/output arguments if necessary;
+
+After the regression tests have been created,
+you can remove all the references to `Recorder` from your code,
+and use the recorded data and the modified scripts in your test suite.
+
+
+### Record selectively
 In the case where the function we want to record 
 is buried deep into a call stack or in a loop,
 the input/output of  all `@record`ed call to `func` 
@@ -92,31 +128,38 @@ of how many times we have called the function,
 and record only the calls in the range
 (in the example, the 13th, the 15th and the 17th).
 
-Then, with the function 
+### Use a custom state object WIP 
 
+It is possible to create your own object 
+where all the calls will be stored,
+Instead of using the global state inside the Recorder module:
 ``` julia
-create_regression_tests("Module.func")
+using Recorder
+using MyModule
+
+mystate1 = Recorder.State()
+res = @record mystate1 13:2:17 func1(a,b,c)
+res = @record mystate1 13:2:17 func2(a,b,c)
+
+
+mystate2 = Recorder.State()
+res = @record mystate2 13:2:17 func3(a,b,c)
+res = @record mystate2 13:2:17 func4(a,b,c)
 ```
 
-a file can be created 
-that contains all the data for the regression test,
-plus a script that contains a `@testset` of regression tests
-based on that data.  
+Then, it will be possible to create 
+the regression test data and script 
+with the `create_regression_test` function:
 
-The script itself might need some modifications.
-In particular:
-- if the functions you are recording act on struct types, 
-  one might have to define their own equality operator,
-  for example
-  - to compare the structure fields by value (recursively)
-  - to provide better diagnostics for failing tests
-    (where is the difference?)
-  - to use `isapprox` instead of `==`
-- to add `MPI` initialization/finalization calls if necessary;
+``` julia
+create_regression_test("MyModule.func",namestem="batch-1",state=mystate)
+```
+which will create 
+the `MyModule_batch-1.jl` 
+and
+the `MyModule_batch-1.data` 
+files.
 
-After the regression tests have been created,
-you can remove all the references to `Recorder` from your code,
-and use the recorded data and the modified scripts in your test suite.
 
 ## Possible features
   The crossed ones are somewhat tested but not yet thoroughly.

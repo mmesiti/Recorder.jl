@@ -220,52 +220,81 @@ function create_regression_tests_data(key, namestem,state::State=gs)
 end
 
 function create_regression_tests(key; namestem=key,state::State=gs)
-    output_filename = create_regression_tests_data(key, namestem,state)
-    script_filename = "regression_tests_$namestem.jl" # DEBUG
-
     fname = split(key, ".")[end]
-    modhierarchstr = join(split(key, ".")[1:end-1], ".")
+    output_filename = create_regression_tests_data(key, namestem,state)
 
-    testsetname = "Tests for $fname"
-    filecontentexpr = quote
+    base_using_directives = quote
         using Test
         using Serialization
-        data = deserialize($output_filename)
-        "You might need to modify this function!"
-        function compare_return_values(rvexp, rv)
-            rvexp == rv
-        end
-        "You might need to modify this function!"
-        function compare_arguments_post(args_post_exp, arg_post)
-            arg_post_exp == arg_post
-        end
+    end
 
-        @testset verbose = true $testsetname begin
-            @testset for i in 1:length(data["return_value"])
-                return_value = data["return_value"][i]
-                arguments = data["arguments"][i]
-                arguments_post = data["arguments_post"][i]
-                @test compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
-                      compare_arguments_post(arguments, arguments_post)
+    function testset_expr(fname,output_filename)
+        testsetname = "Tests for $fname"
+        quote
+            @testset verbose = true $testsetname begin
+                "You might need to modify this function!"
+                function compare_return_values(rvexp, rv)
+                    rvexp == rv
+                end
+                "You might need to modify this function!"
+                function compare_arguments_post(args_post_exp, arg_post)
+                    arg_post_exp == arg_post
+                end
+
+                data = deserialize($output_filename)
+                @testset for i in 1:length(data["return_value"])
+                    return_value = data["return_value"][i]
+                    arguments = data["arguments"][i]
+                    arguments_post = data["arguments_post"][i]
+                    @test compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
+                          compare_arguments_post(arguments, arguments_post)
+                end
             end
         end
     end
-    sbuffer = IOBuffer()
-    println(sbuffer, "using $modhierarchstr")
-    for line in filecontentexpr.args
-        if line isa LineNumberNode
-            println(sbuffer, line)
-        end
+
+    function mod_hierarchy_str(key)
+        modhierarchstr = join(split(key, ".")[1:end-1], ".")
+        "$modhierarchstr"
     end
-    text = sbuffer |>
-           take! |>
-           String |>
-           (t -> replace(t, r"#=.*=#\s*" => ""))
-    #text = replace(text, r"#=.*=#\s*" => "")
-    script_file = open(script_filename, "w")
-    write(script_file, text)
-    close(script_file)
-    filecontentexpr
+
+    function create_text(filecontentexpr,modhierarchstr)
+        sbuffer = IOBuffer()
+
+        println(sbuffer, "using $modhierarchstr")
+
+        for line in filecontentexpr.args
+            if typeof(line) !=  LineNumberNode
+                println(sbuffer, line)
+            end
+        end
+
+        text = sbuffer |>
+               take! |>
+               String |>
+               (t -> replace(t, r"#=.*=#\s*" => ""))
+        #text = replace(text, r"#=.*=#\s*" => "")
+        text
+    end
+
+    function write_to_file(namestem,text)
+        script_filename = "regression_tests_$namestem.jl" # DEBUG
+        script_file = open(script_filename, "w")
+        write(script_file, text)
+        close(script_file)
+    end
+
+    filecontentexpr = quote
+    end
+    append!(filecontentexpr.args,
+            base_using_directives.args,
+            testset_expr(fname,output_filename).args)
+
+    text = create_text(filecontentexpr, mod_hierarchy_str(key))
+
+    write_to_file(namestem,text)
+
+    text
 end
 
 end # module Recorder
