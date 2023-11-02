@@ -105,6 +105,18 @@ using .TestModule
         end
     end
 
+    @testset "@record complains meaningfully if the expression passed is not a range" begin
+        try
+            @record a=b identity(5)
+            @test false
+        catch e
+            @test typeof(e) == ArgumentError
+            @test contains(e.msg,"does not represent a range")
+            @test contains(e.msg,"assign it to a symbol and pass that")
+        end
+    end
+
+
     @testset "Use custom state instead of Recorder's global" begin
         @test begin
            Recorder.clear()

@@ -126,7 +126,18 @@ end
    will be recorded.
 """
 macro record(range_expr::Expr, expr::Expr)
-    _record_with_range(range_expr,expr,:(Recorder.gs))
+    if range_expr.args[1] == :(:)
+        _record_with_range(range_expr,expr,:(Recorder.gs))
+    else
+        message = """
+        The expression '$range_expr' does not represent a range.
+        If you want to pass a state object,
+        assign it to a symbol and pass that instead.
+        """
+        quote
+            throw(ArgumentError($message))
+        end
+    end
 end
 
 """Record macro
