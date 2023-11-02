@@ -128,7 +128,7 @@ of how many times we have called the function,
 and record only the calls in the range
 (in the example, the 13th, the 15th and the 17th).
 
-### Use a custom state object WIP 
+### Use custom state objects 
 
 It is possible to create your own object 
 where all the calls will be stored,
@@ -137,14 +137,9 @@ Instead of using the global state inside the Recorder module:
 using Recorder
 using MyModule
 
-mystate1 = Recorder.State()
-res = @record mystate1 13:2:17 func1(a,b,c)
-res = @record mystate1 13:2:17 func2(a,b,c)
-
-
-mystate2 = Recorder.State()
-res = @record mystate2 13:2:17 func3(a,b,c)
-res = @record mystate2 13:2:17 func4(a,b,c)
+mystate = Recorder.State()
+res = @record mystate 13:2:17 func1(a,b,c)
+res = @record mystate 13:2:17 func2(a,b,c)
 ```
 
 Then, it will be possible to create 
@@ -152,18 +147,20 @@ the regression test data and script
 with the `create_regression_test` function:
 
 ``` julia
-create_regression_test("MyModule.func",namestem="batch-1",state=mystate)
+create_regression_test(state=mystate,tag="batch-1")
 ```
 which will create 
-the `MyModule_batch-1.jl` 
-and
-the `MyModule_batch-1.data` 
+the `regression_tests_batch-1.jl`,
+the `regression_tests_batch-1-func1.data` 
+and the `regression_tests_batch-1-func2.data` 
 files.
+In `regression_tests_batch-1.jl`,
+a different `@testset` will be created for each function.
+
+This can be useful to group tests into different logically separate scenarios.
 
 
 ## Possible features
-  The crossed ones are somewhat tested but not yet thoroughly.
-  Have I already said, it's WIP?
   - [X] records input arguments, even for multiple calls
   - [X] records output values, even for multiple calls
   - [X] records values of arguments after call, even for multiple calls

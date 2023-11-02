@@ -1,7 +1,6 @@
 module Recorder
 using Base: remove_linenums!, nothing_sentinel
 export @record,
-    clear,
     create_regression_tests
 
 import Serialization
@@ -204,11 +203,11 @@ function increase_call_no(key,state::State)
     state.call_number[key] += 1
 end
 
-function create_regression_tests_data(key, namestem,state::State=gs)
+function create_regression_tests_data(key, tag,state::State=gs)
     return_value = state.return_values[key]
     argument = state.argumentss[key]
     argument_post = state.argumentss_post[key]
-    output_filename = "regression_tests_$namestem.data"
+    output_filename = "regression_tests_$tag.data"
 
     data = Dict("return_value" => return_value,
         "arguments" => argument,
@@ -276,41 +275,36 @@ function create_text(filecontentexpr,modhierarchstrs...)
     text
 end
 
-function write_to_file(namestem,text)
-    script_filename = "regression_tests_$namestem.jl" # DEBUG
+function write_to_file(tag,text)
+    script_filename = "regression_tests_$tag.jl" # DEBUG
     script_file = open(script_filename, "w")
     write(script_file, text)
     close(script_file)
 end
 
 
-function create_regression_tests(key::String; namestem=key,state::State=gs)
-    _create_regression_tests([key],namestem=namestem,state=state)
+function create_regression_tests(key::String; tag=key,state::State=gs)
+    _create_regression_tests([key],tag=tag,state=state)
 end
 
-function create_regression_tests(;namestem,state::State=gs)
+function create_regression_tests(;tag,state::State=gs)
     all_keys = [ k for k in keys(state.return_values)]
-    _create_regression_tests(all_keys,namestem=namestem,state=state)
+    _create_regression_tests(all_keys,tag=tag,state=state)
 end
 
-function _create_regression_tests(all_keys::Vector{String};namestem,state::State=gs)
+function _create_regression_tests(all_keys::Vector{String};tag,state::State=gs)
 
-    function get_func_name(key)
-        split(key,".")[end]
-    end
+    func_names = [ split(key,".")[end] for key in all_keys ]
 
-    
-    func_names = [ get_func_name(key) for key in all_keys ]
-
-    function get_ns(namestem,func_name)
+    function get_ns(tag,func_name)
         if length(all_keys) == 1
-            namestem
+            tag
         else
-            "$namestem-$func_name"
+            "$tag-$func_name"
         end
     end
 
-    data_output_filenames = [create_regression_tests_data(key,get_ns(namestem,func_name),state)
+    data_output_filenames = [create_regression_tests_data(key,get_ns(tag,func_name),state)
                              for (key,func_name)
                              in zip(all_keys,func_names)]
 
@@ -324,7 +318,7 @@ function _create_regression_tests(all_keys::Vector{String};namestem,state::State
              in zip(func_names,data_output_filenames)]...)
 
     text = create_text(filecontentexpr, [mod_hierarchy_str(k) for k in all_keys]...)
-    write_to_file(namestem,text)
+    write_to_file(tag,text)
     text
 end
 

@@ -16,12 +16,12 @@ using .TestModule
 
     @testset "Return Value is recorded and can be retrieved with Recorder.gs.return_values" begin
         @test begin
-            clear()
+            Recorder.clear()
             @record f3arg(4, 5, 6)
             Recorder.gs.return_values["TestModule.f3arg"] |> last == f3arg(4, 5, 6)
         end
         @test begin
-            clear()
+            Recorder.clear()
             @record TestModule1.f(4, 5, 6)
             Recorder.gs.return_values["TestModule1.f"] |> last == TestModule1.f(4, 5, 6)
         end
@@ -29,12 +29,12 @@ using .TestModule
 
     @testset "Arguments are recorded and can be retrieved with Recorder.gs.argumentss" begin
         @test begin
-            clear()
+            Recorder.clear()
             @record f3arg(4, 5, 6)
             Recorder.gs.argumentss["TestModule.f3arg"] |> last == [4, 5, 6]
         end
         @test begin
-            clear()
+            Recorder.clear()
             @record TestModule1.f(4, 5, 6)
             Recorder.gs.argumentss["TestModule1.f"] |> last == [4, 5, 6]
         end
@@ -43,7 +43,7 @@ using .TestModule
     @testset "Post-values of args are recorded and can be retrieved with Recorder.gs.argumentss_post" begin
         @test begin
             v = [1, 2, 3]
-            clear()
+            Recorder.clear()
             @record push!(v, 4)
             Recorder.gs.argumentss["Base.push!"] |> last == [[1, 2, 3], 4] &&
                 Recorder.gs.argumentss_post["Base.push!"] |> last == [[1, 2, 3, 4], 4]
@@ -53,7 +53,7 @@ using .TestModule
     @testset "Function that modify in-place work as expected" begin
         @test begin
             v = [1, 2, 3]
-            clear()
+            Recorder.clear()
             @record push!(v, 4)
             v == [1, 2, 3, 4]
         end
@@ -69,14 +69,14 @@ using .TestModule
         end
 
         @test begin
-            clear()
+            Recorder.clear()
             testfun() != 6 && testfun() == 55
         end
     end
 
     @testset "When calling in a loop, number of calls is increased each time" begin
         @test begin
-            clear()
+            Recorder.clear()
             for i in 1:10
                 @record identity(i)
             end
@@ -86,7 +86,7 @@ using .TestModule
 
     @testset "When using record range, only the right calls are recorded." begin
         @test begin
-            clear()
+            Recorder.clear()
             for i in 1:10
                 @record 3:2:7 identity(i)
             end
@@ -101,7 +101,7 @@ using .TestModule
 
     @testset "Use custom state instead of Recorder's global" begin
         @test begin
-           clear()
+           Recorder.clear()
 	       mystate = Recorder.State()
            @record mystate identity(50)
            Recorder.gs.argumentss == Dict() &&
@@ -111,7 +111,7 @@ using .TestModule
 
     @testset "Use record range and custom state" begin
         @test begin
-            clear()
+            Recorder.clear()
             mystate = Recorder.State()
             for i in 1:10
                 @record mystate 3:2:7 identity(i)
@@ -127,24 +127,28 @@ using .TestModule
         end
     end
 
-    @testset "clear(mystate) works as intended" begin
+    @testset "Recorder.clear(mystate) works as intended" begin
         mystate = Recorder.State()
         for i in 1:10
             @record mystate 3:2:7 identity(i)
         end
         @test length(mystate.argumentss["Base.identity"]) == 3
-        clear(mystate)
+        Recorder.clear(mystate)
         @test length(mystate.argumentss) == 0
     end
 
 
-    function setup_cleanup(test, tag)
-        clear()
+    """
+    Utility function to setup and teardown tests,
+    when create_regression_tests is called with a specific key.
+    """
+    function setup_cleanup(test::Function, tag::String)
         function clean_filesystem()
             rm("regression_tests_$tag.data", force=true)
             rm("regression_tests_$tag.jl", force=true)
         end
 
+        Recorder.clear()
         clean_filesystem()
         try
             r = test()
@@ -158,34 +162,7 @@ using .TestModule
         end
     end
 
-    function setup_cleanup(test, tagjl, tagsdata...)
-        clear()
-        function check_filesystem()
-            for tag in tagsdata
-                @test "regression_tests_$tag.data" in readdir()
-            end
-            @test "regression_tests_$tagjl.jl" in readdir()
-        end
-        function clean_filesystem()
-            for tag in tagsdata
-                rm("regression_tests_$tag.data", force=true)
-            end
-            rm("regression_tests_$tagjl.jl", force=true)
-        end
-
-        clean_filesystem()
-        try
-            r = test()
-            check_filesystem()
-            r
-        catch
-            false
-        finally
-            clean_filesystem()
-        end
-    end
-
-    @testset "create_regression_tests(fname) saves arguments and outputs to file" begin
+   @testset "create_regression_tests(fname) saves arguments and outputs to file" begin
         @test begin
             setup_cleanup("Base.identity") do
                 @record identity(5)
@@ -225,7 +202,7 @@ using .TestModule
 
     end
 
-    @testset "create_regression_test(fname,state) uses user-provided state" begin
+    @testset "create_regression_tests(fname,state) uses user-provided state" begin
         @test begin
             setup_cleanup("Base.identity") do
                 mystate = Recorder.State()
@@ -268,22 +245,22 @@ using .TestModule
         end
     end
 
-    @testset "create_regression_test(fname,namestem) uses namestem in filenames" begin
+    @testset "create_regression_tests(fname,tag) uses tag in filenames" begin
         @test begin
-            setup_cleanup("A_Namestem") do
+            setup_cleanup("A_Tag") do
                 @record identity(5)
                 @record identity("hello")
-                create_regression_tests("Base.identity",namestem="A_Namestem")
-                "regression_tests_A_Namestem.jl" in readdir()
+                create_regression_tests("Base.identity",tag="A_Tag")
+                "regression_tests_A_Tag.jl" in readdir()
             end
         end
     end
 
-    @testset "create_regression_test creates appropriate scripts" begin
-        text = setup_cleanup("A_Namestem") do
+    @testset "create_regression_tests creates appropriate scripts" begin
+        text = setup_cleanup("A_Tag") do
             @record identity(5)
             @record identity("hello")
-            create_regression_tests("Base.identity",namestem="A_Namestem")
+            create_regression_tests("Base.identity",tag="A_Tag")
         end
 
         @test contains(text, "using Base") # Module containing the identity function
@@ -297,14 +274,44 @@ using .TestModule
 
     end
 
+    """
+    Utility function to setup and teardown tests,
+    when create_regression_tests is called without a specific key.
+    """
+    function setup_cleanup_nokey(test::Function, tagjl::String, tagsdata::String...)
+        Recorder.clear()
+        function check_filesystem()
+            for tag in tagsdata
+                @test "regression_tests_$tag.data" in readdir()
+            end
+            @test "regression_tests_$tagjl.jl" in readdir()
+        end
+        function clean_filesystem()
+            for tag in tagsdata
+                rm("regression_tests_$tag.data", force=true)
+            end
+            rm("regression_tests_$tagjl.jl", force=true)
+        end
+
+        clean_filesystem()
+        try
+            r = test()
+            check_filesystem()
+            r
+        catch
+            false
+        finally
+            clean_filesystem()
+        end
+    end
     @testset verbose=true "create_regression_test works without key" begin
-        text = setup_cleanup("A_Namestem",
-                             "A_Namestem-f3arg",
-                             "A_Namestem-identity") do
+        text = setup_cleanup_nokey("A_Tag",
+                                   "A_Tag-f3arg",
+                                   "A_Tag-identity") do
             mystate = Recorder.State()
             @record mystate identity(5)
             @record mystate f3arg(4,5,6)
-            create_regression_tests(state=mystate,namestem="A_Namestem")
+            create_regression_tests(state=mystate,tag="A_Tag")
         end
 
         @test count("using Test\n"       ,text) == 1
@@ -312,9 +319,33 @@ using .TestModule
         @test count("using Base"         ,text) == 1 # Module containing the identity function
         @test count("using TestModule"   ,text) == 1
 
-        @test count("@testset",text) == 2*2
+        @test count("@testset",text) == 2*2 # Inner and outer
         @test count("@test "                         ,text) == 2
         @test count("function compare_return_values" ,text) == 2
         @test count("function compare_arguments_post",text) == 2
+        @test contains(text,"Tests for f3arg")
+        @test contains(text,"Tests for identity")
+    end
+
+
+    @testset verbose=true "create_regression_test works by README.md example" begin
+        text = setup_cleanup_nokey("batch-1",
+                                   "batch-1-func1",
+                                   "batch-1-func2") do
+            a,b,c = 3,4,5
+
+            mystate = Recorder.State()
+            @record mystate func1(a,b,c)
+            @record mystate func2(a,b,c)
+
+            text = create_regression_tests(state=mystate,tag="batch-1")
+            @test "regression_tests_batch-1.jl" in readdir()
+            @test "regression_tests_batch-1-func1.data" in readdir()
+            @test "regression_tests_batch-1-func2.data" in readdir()
+            text
+        end
+
+        @test contains(text,"Tests for func1")
+        @test contains(text,"Tests for func2")
     end
 end
