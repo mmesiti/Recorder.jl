@@ -38,7 +38,13 @@ using .TestModule
             @record TestModule1.f(4, 5, 6)
             Recorder.gs.argumentss["TestModule1.f"] |> last == [4, 5, 6]
         end
+        @test begin
+            Recorder.clear()
+            @record TestModule1.SubMod11.f(4, 5, 6)
+            Recorder.gs.argumentss["TestModule1.SubMod11.f"] |> last == [4, 5, 6]
+        end
     end
+
 
     @testset "Post-values of args are recorded and can be retrieved with Recorder.gs.argumentss_post" begin
         @test begin

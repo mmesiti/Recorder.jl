@@ -23,15 +23,5 @@ module SubMod11
 function f(a, b, c)
     a - b - c
 end
-
-
-end
-
-end
-
-module TestModule2
-
-function f(a, b, c)
-    a + b + c
 end
 end
