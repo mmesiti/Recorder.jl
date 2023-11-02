@@ -169,7 +169,9 @@ This can be useful to group tests into different logically separate scenarios.
   - [X] creates automagically code and data for regression test cases
         based on the recording
     - [ ] and the code created works out of the box (getting close)
-  - [ ] Use custom names for output data and script files
+  - [X] store state in and create regression tests from a user-defined object 
+  - [ ] Use custom names for output data and script files  
+        At the moment a tag can be chosen, but not more than that.
   - [ ] the recording and clearing is thread-safe 
   - [ ] makes sure that if expressions are passed as arguments,
         these expressions are evaluated only once
@@ -179,6 +181,9 @@ This can be useful to group tests into different logically separate scenarios.
         so that it can be left in the code without causing issues.
   - [ ] `create_regression_tests` should error if the files are already there
   - [ ] automatic value-based comparisons
+ 
+  If you are interested in any of these or more, 
+  please open an issue and start the discussion.
 ## Impossible features
   Some of the features in the "Possible Features" list might move here.
   - monitor side effects of functions
