@@ -219,82 +219,114 @@ function create_regression_tests_data(key, namestem,state::State=gs)
 
 end
 
-function create_regression_tests(key; namestem=key,state::State=gs)
-    fname = split(key, ".")[end]
-    output_filename = create_regression_tests_data(key, namestem,state)
 
-    base_using_directives = quote
-        using Test
-        using Serialization
-    end
+ _base_using_directives = quote
+     using Test
+     using Serialization
+ end
 
-    function testset_expr(fname,output_filename)
-        testsetname = "Tests for $fname"
-        quote
-            @testset verbose = true $testsetname begin
-                "You might need to modify this function!"
-                function compare_return_values(rvexp, rv)
-                    rvexp == rv
-                end
-                "You might need to modify this function!"
-                function compare_arguments_post(args_post_exp, arg_post)
-                    arg_post_exp == arg_post
-                end
+function testset_expr(func_name,data_output_filename)
+    testsetname = "Tests for $func_name"
+    quote
+        @testset verbose = true $testsetname begin
+            "You might need to modify this function!"
+            function compare_return_values(rvexp, rv)
+                rvexp == rv
+            end
+            "You might need to modify this function!"
+            function compare_arguments_post(args_post_exp, arg_post)
+                arg_post_exp == arg_post
+            end
 
-                data = deserialize($output_filename)
-                @testset for i in 1:length(data["return_value"])
-                    return_value = data["return_value"][i]
-                    arguments = data["arguments"][i]
-                    arguments_post = data["arguments_post"][i]
-                    @test compare_return_values(return_value, $(Symbol(fname))(arguments...)) &&
-                          compare_arguments_post(arguments, arguments_post)
-                end
+            data = deserialize($data_output_filename)
+            @testset for i in 1:length(data["return_value"])
+                return_value = data["return_value"][i]
+                arguments = data["arguments"][i]
+                arguments_post = data["arguments_post"][i]
+                @test compare_return_values(return_value, $(Symbol(func_name))(arguments...)) &&
+                      compare_arguments_post(arguments, arguments_post)
             end
         end
     end
+end
 
-    function mod_hierarchy_str(key)
-        modhierarchstr = join(split(key, ".")[1:end-1], ".")
-        "$modhierarchstr"
-    end
+function mod_hierarchy_str(key)
+    modhierarchstr = join(split(key, ".")[1:end-1], ".")
+    "$modhierarchstr"
+end
 
-    function create_text(filecontentexpr,modhierarchstr)
-        sbuffer = IOBuffer()
+function create_text(filecontentexpr,modhierarchstrs...)
+    sbuffer = IOBuffer()
 
+    for modhierarchstr in modhierarchstrs
         println(sbuffer, "using $modhierarchstr")
+    end
 
-        for line in filecontentexpr.args
-            if typeof(line) !=  LineNumberNode
-                println(sbuffer, line)
-            end
+    for line in filecontentexpr.args
+        if typeof(line) !=  LineNumberNode
+            println(sbuffer, line)
         end
-
-        text = sbuffer |>
-               take! |>
-               String |>
-               (t -> replace(t, r"#=.*=#\s*" => ""))
-        #text = replace(text, r"#=.*=#\s*" => "")
-        text
     end
 
-    function write_to_file(namestem,text)
-        script_filename = "regression_tests_$namestem.jl" # DEBUG
-        script_file = open(script_filename, "w")
-        write(script_file, text)
-        close(script_file)
+    text = sbuffer |>
+           take! |>
+           String |>
+           (t -> replace(t, r"#=.*=#\s*" => ""))
+    #text = replace(text, r"#=.*=#\s*" => "")
+    text
+end
+
+function write_to_file(namestem,text)
+    script_filename = "regression_tests_$namestem.jl" # DEBUG
+    script_file = open(script_filename, "w")
+    write(script_file, text)
+    close(script_file)
+end
+
+
+function create_regression_tests(key::String; namestem=key,state::State=gs)
+    _create_regression_tests([key],namestem=namestem,state=state)
+end
+
+function create_regression_tests(;namestem,state::State=gs)
+    all_keys = [ k for k in keys(state.return_values)]
+    _create_regression_tests(all_keys,namestem=namestem,state=state)
+end
+
+function _create_regression_tests(all_keys::Vector{String};namestem,state::State=gs)
+
+    function get_func_name(key)
+        split(key,".")[end]
     end
+
+    
+    func_names = [ get_func_name(key) for key in all_keys ]
+
+    function get_ns(namestem,func_name)
+        if length(all_keys) == 1
+            namestem
+        else
+            "$namestem-$func_name"
+        end
+    end
+
+    data_output_filenames = [create_regression_tests_data(key,get_ns(namestem,func_name),state)
+                             for (key,func_name)
+                             in zip(all_keys,func_names)]
+
 
     filecontentexpr = quote
     end
     append!(filecontentexpr.args,
-            base_using_directives.args,
-            testset_expr(fname,output_filename).args)
+            _base_using_directives.args,
+            [testset_expr(func_name, data_output_filename).args
+             for (func_name,data_output_filename)
+             in zip(func_names,data_output_filenames)]...)
 
-    text = create_text(filecontentexpr, mod_hierarchy_str(key))
-
+    text = create_text(filecontentexpr, [mod_hierarchy_str(k) for k in all_keys]...)
     write_to_file(namestem,text)
-
     text
 end
+
 
 end # module Recorder

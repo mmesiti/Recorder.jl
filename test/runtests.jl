@@ -138,17 +138,50 @@ using .TestModule
     end
 
 
-    function setup_cleanup(test, namestem)
+    function setup_cleanup(test, tag)
         clear()
-        rm("regression_tests_$namestem.data", force=true)
-        rm("regression_tests_$namestem.jl", force=true)
+        function clean_filesystem()
+            rm("regression_tests_$tag.data", force=true)
+            rm("regression_tests_$tag.jl", force=true)
+        end
+
+        clean_filesystem()
         try
-            test()
+            r = test()
+            @test "regression_tests_$tag.data" in readdir()
+            @test "regression_tests_$tag.jl" in readdir()
+            r
         catch
             false
         finally
-            rm("regression_tests_$namestem.data", force=true)
-            rm("regression_tests_$namestem.jl", force=true)
+            clean_filesystem()
+        end
+    end
+
+    function setup_cleanup(test, tagjl, tagsdata...)
+        clear()
+        function check_filesystem()
+            for tag in tagsdata
+                @test "regression_tests_$tag.data" in readdir()
+            end
+            @test "regression_tests_$tagjl.jl" in readdir()
+        end
+        function clean_filesystem()
+            for tag in tagsdata
+                rm("regression_tests_$tag.data", force=true)
+            end
+            rm("regression_tests_$tagjl.jl", force=true)
+        end
+
+        clean_filesystem()
+        try
+            r = test()
+            check_filesystem()
+            r
+        catch
+            false
+        finally
+            clean_filesystem()
         end
     end
 
@@ -262,5 +295,26 @@ using .TestModule
         @test contains(text,"function compare_return_values")
         @test contains(text,"function compare_arguments_post")
 
+    end
+
+    @testset verbose=true "create_regression_test works without key" begin
+        text = setup_cleanup("A_Namestem",
+                             "A_Namestem-f3arg",
+                             "A_Namestem-identity") do
+            mystate = Recorder.State()
+            @record mystate identity(5)
+            @record mystate f3arg(4,5,6)
+            create_regression_tests(state=mystate,namestem="A_Namestem")
+        end
+
+        @test count("using Test\n"       ,text) == 1
+        @test count("using Serialization",text) == 1
+        @test count("using Base"         ,text) == 1 # Module containing the identity function
+        @test count("using TestModule"   ,text) == 1
+
+        @test count("@testset",text) == 2*2
+        @test count("@test "                         ,text) == 2
+        @test count("function compare_return_values" ,text) == 2
+        @test count("function compare_arguments_post",text) == 2
     end
 end
