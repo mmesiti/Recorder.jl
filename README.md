@@ -170,7 +170,11 @@ This can be useful to group tests into different logically separate scenarios.
         based on the recording
     - [ ] and the code created works out of the box (getting close)
   - [X] store state in and create regression tests from a user-defined object 
-  - [ ] Use custom names for output data and script files  
+    - [ ] make it possible to use expressions for the state object
+          (e.g., `mystates["first-batch"]`)
+  - [ ] allow "keyword arguments" for `@record` 
+        (possibly using [MacroTools.jl](https://github.com/FluxML/MacroTools.jl))
+  - [ ] Use custom names for output data and script files.  
         At the moment a tag can be chosen, but not more than that.
   - [ ] the recording and clearing is thread-safe 
   - [ ] makes sure that if expressions are passed as arguments,
