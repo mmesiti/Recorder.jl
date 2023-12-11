@@ -1,9 +1,8 @@
 module Recorder
 using Base: remove_linenums!, nothing_sentinel
-export @record,
-    create_regression_tests
+export @record, create_regression_tests
 
-import Serialization
+import JLD2
 
 struct State
     return_values::Dict{String,Vector{Any}}
@@ -12,7 +11,7 @@ struct State
     call_number::Dict{String,Int32}
 end
 
-State() = State(Dict(),Dict(),Dict(),Dict())
+State() = State(Dict(), Dict(), Dict(), Dict())
 
 gs = State()
 
@@ -28,12 +27,19 @@ function _add_getkey!(output::Expr, input::Expr)
     push!(output.args, :(method = which($(esc(input.args[1])), argtypes)))
     push!(output.args, :(module_implementing = method.module))
     push!(output.args, :(name = method.name))
-    push!(output.args, :(key = replace(string(module_implementing) * "." * string(name),
-        r"^Main\." => s"")))
+    push!(
+        output.args,
+        :(
+            key = replace(
+                string(module_implementing) * "." * string(name),
+                r"^Main\." => s"",
+            )
+        ),
+    )
 end
 
 """Creates the expression to record the function call."""
-function _record_expr(input::Expr,state)
+function _record_expr(input::Expr, state)
     args = input.args[2:end]
 
     # Start assembling macro
@@ -41,7 +47,7 @@ function _record_expr(input::Expr,state)
         args_input = []
         args_output = []
     end
-    _add_getkey!(output,input)
+    _add_getkey!(output, input)
 
     # process each argument pre-call
     for arg in args
@@ -55,7 +61,7 @@ function _record_expr(input::Expr,state)
     push!(output.args, :(output = $(esc(input))))
     push!(output.args, :(record_return_values(key, deepcopy(output), $(esc(state)))))
     # increase call_number
-    push!(output.args, :(increase_call_no(key,$(esc(state)))))
+    push!(output.args, :(increase_call_no(key, $(esc(state)))))
 
     # process each argument post evaluation
     for arg in args
@@ -63,7 +69,7 @@ function _record_expr(input::Expr,state)
     end
 
     # record argument list in global dictionary (post evaluation)
-    push!(output.args, :(record_arguments_post(key, args_output,$(esc(state)))))
+    push!(output.args, :(record_arguments_post(key, args_output, $(esc(state)))))
 
     # leaving output at the end as the expression value
     push!(output.args, :(output))
@@ -73,10 +79,10 @@ end
 """Return an expression where the function call is not recorded,
    but the call counter is increased.
 """
-function _no_record_expr(expr::Expr,state)
+function _no_record_expr(expr::Expr, state)
     output::Expr = quote end
-    _add_getkey!(output,expr)
-    push!(output.args, :(increase_call_no(key,$(esc(state)))))
+    _add_getkey!(output, expr)
+    push!(output.args, :(increase_call_no(key, $(esc(state)))))
     push!(output.args, :($(esc(expr))))
     output
 end
@@ -84,12 +90,12 @@ end
 """Creates an expression where function calls are recorded
    only in the specified range.
 """
-function _record_with_range(record_range,expr::Expr,state)
+function _record_with_range(record_range, expr::Expr, state)
     output::Expr = quote end
-    _add_getkey!(output,expr)
+    _add_getkey!(output, expr)
 
     if record_range !== nothing
-        condition = :(get_call_no(key,$(esc(state))) + 1 in $record_range)
+        condition = :(get_call_no(key, $(esc(state))) + 1 in $record_range)
     else
         condition = :(true)
     end
@@ -100,8 +106,8 @@ function _record_with_range(record_range,expr::Expr,state)
         else
         end
     )
-    ifblock.args[2] = _record_expr(expr,state)
-    ifblock.args[3] = _no_record_expr(expr,state)
+    ifblock.args[2] = _record_expr(expr, state)
+    ifblock.args[3] = _no_record_expr(expr, state)
     push!(output.args, ifblock)
     output
 end
@@ -113,7 +119,7 @@ end
    records every call to the function.
 """
 macro record(expr::Expr)
-    _record_expr(expr,:(Recorder.gs))
+    _record_expr(expr, :(Recorder.gs))
 end
 
 """Record macro with an additional range expression.
@@ -127,7 +133,7 @@ end
 """
 macro record(range_expr::Expr, expr::Expr)
     if range_expr.args[1] == :(:)
-        _record_with_range(range_expr,expr,:(Recorder.gs))
+        _record_with_range(range_expr, expr, :(Recorder.gs))
     else
         message = """
         The expression '$range_expr' does not represent a range.
@@ -145,7 +151,7 @@ end
    instead of the the global state in the Recorder module.
 """
 macro record(state_expr::Symbol, expr::Expr)
-    _record_expr(expr,state_expr)
+    _record_expr(expr, state_expr)
 end
 
 """Record macro with an additional range expression,
@@ -159,35 +165,35 @@ end
    and only every <interval>-th function call
    will be recorded.
 """
-macro record(state_expr::Symbol,range_expr::Expr, expr::Expr)
-    _record_with_range(range_expr,expr,state_expr)
+macro record(state_expr::Symbol, range_expr::Expr, expr::Expr)
+    _record_with_range(range_expr, expr, state_expr)
 end
 
 
 # Internal functions to be used output expressions
 
-function record_arguments(key, args_input,state::State)
+function record_arguments(key, args_input, state::State)
     if !haskey(state.argumentss, key)
         state.argumentss[key] = []
     end
     push!(state.argumentss[key], args_input)
 end
 
-function record_return_values(key, return_value,state::State)
+function record_return_values(key, return_value, state::State)
     if !haskey(state.return_values, key)
         state.return_values[key] = []
     end
     push!(state.return_values[key], return_value)
 end
 
-function record_arguments_post(key, args_output,state::State)
+function record_arguments_post(key, args_output, state::State)
     if !haskey(state.argumentss_post, key)
         state.argumentss_post[key] = []
     end
     push!(state.argumentss_post[key], args_output)
 end
 
-function clear(state::State=gs)
+function clear(state::State = gs)
     function cleardict!(d)
         for k in keys(d)
             delete!(d, k)
@@ -200,42 +206,44 @@ function clear(state::State=gs)
     nothing
 end
 
-function get_call_no(key,state::State)
+function get_call_no(key, state::State)
     if !haskey(state.call_number, key)
         state.call_number[key] = 0
     end
     state.call_number[key]
 end
 
-function increase_call_no(key,state::State)
+function increase_call_no(key, state::State)
     if !haskey(state.call_number, key)
         state.call_number[key] = 0
     end
     state.call_number[key] += 1
 end
 
-function create_regression_tests_data(key, tag,state::State=gs)
+function create_regression_tests_data(key, tag, state::State = gs)
     return_value = state.return_values[key]
     argument = state.argumentss[key]
     argument_post = state.argumentss_post[key]
     output_filename = "regression_tests_$tag.data"
 
-    data = Dict("return_value" => return_value,
+    data = Dict(
+        "return_value" => return_value,
         "arguments" => argument,
-        "arguments_post" => argument_post)
+        "arguments_post" => argument_post,
+    )
 
-    Serialization.serialize(output_filename, data)
+    JLD2.save_object(output_filename, data)
     output_filename
 
 end
 
 
- _base_using_directives = quote
-     using Test
-     using Serialization
- end
+_base_using_directives = quote
+    using Test
+    using JLD2
+end
 
-function testset_expr(func_name,data_output_filename)
+function testset_expr(func_name, data_output_filename)
     testsetname = "Tests for $func_name"
     quote
         @testset verbose = true $testsetname begin
@@ -248,13 +256,15 @@ function testset_expr(func_name,data_output_filename)
                 arg_post_exp == arg_post
             end
 
-            data = deserialize($data_output_filename)
-            @testset for i in 1:length(data["return_value"])
+            data = load_object($data_output_filename)
+            @testset for i = 1:length(data["return_value"])
                 return_value = data["return_value"][i]
                 arguments = data["arguments"][i]
                 arguments_post = data["arguments_post"][i]
-                @test compare_return_values(return_value, $(Symbol(func_name))(arguments...)) &&
-                      compare_arguments_post(arguments, arguments_post)
+                @test compare_return_values(
+                    return_value,
+                    $(Symbol(func_name))(arguments...),
+                ) && compare_arguments_post(arguments, arguments_post)
             end
         end
     end
@@ -265,7 +275,7 @@ function mod_hierarchy_str(key)
     "$modhierarchstr"
 end
 
-function create_text(filecontentexpr,modhierarchstrs...)
+function create_text(filecontentexpr, modhierarchstrs...)
     sbuffer = IOBuffer()
 
     for modhierarchstr in modhierarchstrs
@@ -273,20 +283,17 @@ function create_text(filecontentexpr,modhierarchstrs...)
     end
 
     for line in filecontentexpr.args
-        if typeof(line) !=  LineNumberNode
+        if typeof(line) != LineNumberNode
             println(sbuffer, line)
         end
     end
 
-    text = sbuffer |>
-           take! |>
-           String |>
-           (t -> replace(t, r"#=.*=#\s*" => ""))
+    text = sbuffer |> take! |> String |> (t -> replace(t, r"#=.*=#\s*" => ""))
     #text = replace(text, r"#=.*=#\s*" => "")
     text
 end
 
-function write_to_file(tag,text)
+function write_to_file(tag, text)
     script_filename = "regression_tests_$tag.jl" # DEBUG
     script_file = open(script_filename, "w")
     write(script_file, text)
@@ -294,20 +301,20 @@ function write_to_file(tag,text)
 end
 
 
-function create_regression_tests(key::String; tag=key,state::State=gs)
-    _create_regression_tests([key],tag=tag,state=state)
+function create_regression_tests(key::String; tag = key, state::State = gs)
+    _create_regression_tests([key], tag = tag, state = state)
 end
 
-function create_regression_tests(;tag,state::State=gs)
-    all_keys = [ k for k in keys(state.return_values)]
-    _create_regression_tests(all_keys,tag=tag,state=state)
+function create_regression_tests(; tag, state::State = gs)
+    all_keys = [k for k in keys(state.return_values)]
+    _create_regression_tests(all_keys, tag = tag, state = state)
 end
 
-function _create_regression_tests(all_keys::Vector{String};tag,state::State=gs)
+function _create_regression_tests(all_keys::Vector{String}; tag, state::State = gs)
 
-    func_names = [ split(key,".")[end] for key in all_keys ]
+    func_names = [split(key, ".")[end] for key in all_keys]
 
-    function get_ns(tag,func_name)
+    function get_ns(tag, func_name)
         if length(all_keys) == 1
             tag
         else
@@ -315,21 +322,24 @@ function _create_regression_tests(all_keys::Vector{String};tag,state::State=gs)
         end
     end
 
-    data_output_filenames = [create_regression_tests_data(key,get_ns(tag,func_name),state)
-                             for (key,func_name)
-                             in zip(all_keys,func_names)]
+    data_output_filenames = [
+        create_regression_tests_data(key, get_ns(tag, func_name), state) for
+        (key, func_name) in zip(all_keys, func_names)
+    ]
 
 
-    filecontentexpr = quote
-    end
-    append!(filecontentexpr.args,
-            _base_using_directives.args,
-            [testset_expr(func_name, data_output_filename).args
-             for (func_name,data_output_filename)
-             in zip(func_names,data_output_filenames)]...)
+    filecontentexpr = quote end
+    append!(
+        filecontentexpr.args,
+        _base_using_directives.args,
+        [
+            testset_expr(func_name, data_output_filename).args for
+            (func_name, data_output_filename) in zip(func_names, data_output_filenames)
+        ]...,
+    )
 
     text = create_text(filecontentexpr, [mod_hierarchy_str(k) for k in all_keys]...)
-    write_to_file(tag,text)
+    write_to_file(tag, text)
     text
 end
 

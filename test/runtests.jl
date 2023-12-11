@@ -1,6 +1,6 @@
 using Test
 using Recorder
-using Serialization
+using JLD2
 include("TestModules.jl")
 
 using .TestModule
@@ -83,7 +83,7 @@ using .TestModule
     @testset "When calling in a loop, number of calls is increased each time" begin
         @test begin
             Recorder.clear()
-            for i in 1:10
+            for i = 1:10
                 @record identity(i)
             end
             Recorder.gs.call_number["Base.identity"] == 10
@@ -93,7 +93,7 @@ using .TestModule
     @testset "When using record range, only the right calls are recorded." begin
         @test begin
             Recorder.clear()
-            for i in 1:10
+            for i = 1:10
                 @record 3:2:7 identity(i)
             end
             try
@@ -107,23 +107,23 @@ using .TestModule
 
     @testset "@record complains meaningfully if the expression passed is not a range" begin
         try
-            @record a=b identity(5)
+            @record a = b identity(5)
             @test false
         catch e
             @test typeof(e) == ArgumentError
-            @test contains(e.msg,"does not represent a range")
-            @test contains(e.msg,"assign it to a symbol and pass that")
+            @test contains(e.msg, "does not represent a range")
+            @test contains(e.msg, "assign it to a symbol and pass that")
         end
     end
 
 
     @testset "Use custom state instead of Recorder's global" begin
         @test begin
-           Recorder.clear()
-	       mystate = Recorder.State()
-           @record mystate identity(50)
-           Recorder.gs.argumentss == Dict() &&
-               mystate.argumentss["Base.identity"] == [[50]]
+            Recorder.clear()
+            mystate = Recorder.State()
+            @record mystate identity(50)
+            Recorder.gs.argumentss == Dict() &&
+                mystate.argumentss["Base.identity"] == [[50]]
         end
     end
 
@@ -131,12 +131,12 @@ using .TestModule
         @test begin
             Recorder.clear()
             mystate = Recorder.State()
-            for i in 1:10
+            for i = 1:10
                 @record mystate 3:2:7 identity(i)
             end
             try
                 Recorder.gs.argumentss == Dict() &&
-                   mystate.argumentss["Base.identity"] == [[3],[5],[7]]
+                    mystate.argumentss["Base.identity"] == [[3], [5], [7]]
             catch
                 println(Recorder.gs.return_values)
                 println(mystate.return_values)
@@ -147,7 +147,7 @@ using .TestModule
 
     @testset "Recorder.clear(mystate) works as intended" begin
         mystate = Recorder.State()
-        for i in 1:10
+        for i = 1:10
             @record mystate 3:2:7 identity(i)
         end
         @test length(mystate.argumentss["Base.identity"]) == 3
@@ -162,8 +162,8 @@ using .TestModule
     """
     function setup_cleanup(test::Function, tag::String)
         function clean_filesystem()
-            rm("regression_tests_$tag.data", force=true)
-            rm("regression_tests_$tag.jl", force=true)
+            rm("regression_tests_$tag.data", force = true)
+            rm("regression_tests_$tag.jl", force = true)
         end
 
         Recorder.clear()
@@ -180,7 +180,7 @@ using .TestModule
         end
     end
 
-   @testset "create_regression_tests(fname) saves arguments and outputs to file" begin
+    @testset "create_regression_tests(fname) saves arguments and outputs to file" begin
         @test begin
             setup_cleanup("Base.identity") do
                 @record identity(5)
@@ -198,7 +198,7 @@ using .TestModule
             setup_cleanup("Base.identity") do
                 @record identity(5)
                 create_regression_tests("Base.identity")
-                data = deserialize("regression_tests_Base.identity.data")
+                data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5] &&
                     data["arguments"] == [[5]] &&
                     data["arguments_post"] == [[5]]
@@ -211,7 +211,7 @@ using .TestModule
                 @record identity("hello")
                 @record identity(["hello", 7])
                 create_regression_tests("Base.identity")
-                data = deserialize("regression_tests_Base.identity.data")
+                data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5, "hello", ["hello", 7]] &&
                     data["arguments"] == [[5], ["hello"], [["hello", 7]]] &&
                     data["arguments_post"] == [[5], ["hello"], [["hello", 7]]]
@@ -227,8 +227,8 @@ using .TestModule
                 @record mystate identity(5)
                 @record mystate identity("hello")
                 @record mystate identity(["hello", 7])
-                create_regression_tests("Base.identity",state=mystate)
-                data = deserialize("regression_tests_Base.identity.data")
+                create_regression_tests("Base.identity", state = mystate)
+                data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5, "hello", ["hello", 7]] &&
                     data["arguments"] == [[5], ["hello"], [["hello", 7]]] &&
                     data["arguments_post"] == [[5], ["hello"], [["hello", 7]]]
@@ -255,7 +255,7 @@ using .TestModule
                 print(io, expr)
                 filestring = String(take!(io))
                 occursin("using Test", filestring) &&
-                    occursin("using Serialization", filestring) &&
+                    occursin("using JLD2", filestring) &&
                     occursin("@testset for i", filestring) &&
                     occursin("Base.identity", filestring) &&
                     occursin("@test ", filestring)
@@ -268,7 +268,7 @@ using .TestModule
             setup_cleanup("A_Tag") do
                 @record identity(5)
                 @record identity("hello")
-                create_regression_tests("Base.identity",tag="A_Tag")
+                create_regression_tests("Base.identity", tag = "A_Tag")
                 "regression_tests_A_Tag.jl" in readdir()
             end
         end
@@ -278,17 +278,17 @@ using .TestModule
         text = setup_cleanup("A_Tag") do
             @record identity(5)
             @record identity("hello")
-            create_regression_tests("Base.identity",tag="A_Tag")
+            create_regression_tests("Base.identity", tag = "A_Tag")
         end
 
         @test contains(text, "using Base") # Module containing the identity function
         @test contains(text, "using Test")
-        @test contains(text, "using Serialization")
+        @test contains(text, "using JLD2")
 
-        @test contains(text,"@testset")
-        @test contains(text,"@test ")
-        @test contains(text,"function compare_return_values")
-        @test contains(text,"function compare_arguments_post")
+        @test contains(text, "@testset")
+        @test contains(text, "@test ")
+        @test contains(text, "function compare_return_values")
+        @test contains(text, "function compare_arguments_post")
 
     end
 
@@ -306,9 +306,9 @@ using .TestModule
         end
         function clean_filesystem()
             for tag in tagsdata
-                rm("regression_tests_$tag.data", force=true)
+                rm("regression_tests_$tag.data", force = true)
             end
-            rm("regression_tests_$tagjl.jl", force=true)
+            rm("regression_tests_$tagjl.jl", force = true)
         end
 
         clean_filesystem()
@@ -322,48 +322,44 @@ using .TestModule
             clean_filesystem()
         end
     end
-    @testset verbose=true "create_regression_test works without key" begin
-        text = setup_cleanup_nokey("A_Tag",
-                                   "A_Tag-f3arg",
-                                   "A_Tag-identity") do
+    @testset verbose = true "create_regression_test works without key" begin
+        text = setup_cleanup_nokey("A_Tag", "A_Tag-f3arg", "A_Tag-identity") do
             mystate = Recorder.State()
             @record mystate identity(5)
-            @record mystate f3arg(4,5,6)
-            create_regression_tests(state=mystate,tag="A_Tag")
+            @record mystate f3arg(4, 5, 6)
+            create_regression_tests(state = mystate, tag = "A_Tag")
         end
 
-        @test count("using Test\n"       ,text) == 1
-        @test count("using Serialization",text) == 1
-        @test count("using Base"         ,text) == 1 # Module containing the identity function
-        @test count("using TestModule"   ,text) == 1
+        @test count("using Test\n", text) == 1
+        @test count("using JLD2", text) == 1
+        @test count("using Base", text) == 1 # Module containing the identity function
+        @test count("using TestModule", text) == 1
 
-        @test count("@testset",text) == 2*2 # Inner and outer
-        @test count("@test "                         ,text) == 2
-        @test count("function compare_return_values" ,text) == 2
-        @test count("function compare_arguments_post",text) == 2
-        @test contains(text,"Tests for f3arg")
-        @test contains(text,"Tests for identity")
+        @test count("@testset", text) == 2 * 2 # Inner and outer
+        @test count("@test ", text) == 2
+        @test count("function compare_return_values", text) == 2
+        @test count("function compare_arguments_post", text) == 2
+        @test contains(text, "Tests for f3arg")
+        @test contains(text, "Tests for identity")
     end
 
 
-    @testset verbose=true "create_regression_test works by README.md example" begin
-        text = setup_cleanup_nokey("batch-1",
-                                   "batch-1-func1",
-                                   "batch-1-func2") do
-            a,b,c = 3,4,5
+    @testset verbose = true "create_regression_test works by README.md example" begin
+        text = setup_cleanup_nokey("batch-1", "batch-1-func1", "batch-1-func2") do
+            a, b, c = 3, 4, 5
 
             mystate = Recorder.State()
-            @record mystate func1(a,b,c)
-            @record mystate func2(a,b,c)
+            @record mystate func1(a, b, c)
+            @record mystate func2(a, b, c)
 
-            text = create_regression_tests(state=mystate,tag="batch-1")
+            text = create_regression_tests(state = mystate, tag = "batch-1")
             @test "regression_tests_batch-1.jl" in readdir()
             @test "regression_tests_batch-1-func1.data" in readdir()
             @test "regression_tests_batch-1-func2.data" in readdir()
             text
         end
 
-        @test contains(text,"Tests for func1")
-        @test contains(text,"Tests for func2")
+        @test contains(text, "Tests for func1")
+        @test contains(text, "Tests for func2")
     end
 end

@@ -30,7 +30,7 @@ This requires a lot of boilerplate code for the recording
 and the serialization/deserialization 
 of the data.
 Fortunately, thanks to the macro system and the 
-`Serialization` library,
+`JLD2` library,
 it is quite trivial to do the recording in Julia
 (at least for serial code).
 
