@@ -54,7 +54,7 @@ function deep_in_the_callstack_in_nested_loops_and_without_tests()
 end
 ```
 
-Just use `Recorder` and slap `@record` in front of the function call:
+Then use `Recorder` and slap `@record` in front of the function call:
 
 ``` julia
 using Recorder
@@ -71,6 +71,11 @@ end
 This will make record the input arguments, 
 the output and the values of the arguments
 after the call.  
+If the instrumented code is in a package,
+you might also have to add `Recorder.jl` 
+to its dependencies. 
+It is advised to back up `Project.toml` and `Manifest.toml` 
+before doing that.
 
 Then, with the function 
 
@@ -139,7 +144,6 @@ using MyModule
 
 mystate = Recorder.State()
 res = @record mystate 13:2:17 func1(a,b,c)
-res = @record mystate 13:2:17 func2(a,b,c)
 ```
 
 Then, it will be possible to create 
@@ -158,6 +162,21 @@ In `regression_tests_batch-1.jl`,
 a different `@testset` will be created for each function.
 
 This can be useful to group tests into different logically separate scenarios.
+
+## Troubleshooting 
+
+
+### Recorder not found when running instrumented code
+
+**Problem**: `ERROR: ArgumentError: Package Recorder not found in current path`
+
+**Solutions**:
+  - Ensure Recorder is added to the project where it's used: `julia --project -e 'using Pkg;
+  Pkg.add("Recorder")'`
+  - When using separate test environment, activate it: `julia --project=test-utils script.jl`
+  - Remember to remove Recorder from production dependencies after generating tests
+
+
 
 
 ## Possible features
