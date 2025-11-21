@@ -246,14 +246,27 @@ end
 function testset_expr(func_name, data_output_filename)
     testsetname = "Tests for $func_name"
     quote
+        function recursive_value_equality_check(strA,strB)
+            typeof(strA) == typeof(strB) &&
+                if fieldnames(typeof(strA)) == ()
+                    strA == strB
+                else
+                    all( getfield(strA,field) == getfield(strB,field) ||
+                        recursive_value_equality_check(getfield(strA,field),
+                                                       getfield(strB,field))
+                         for field in fieldnames(typeof(strA))
+                             )
+                end
+        end
+
         @testset verbose = true $testsetname begin
             "You might need to modify this function!"
             function compare_return_values(rvexp, rv)
-                rvexp == rv
+                recursive_value_equality_check(rvexp,rv)
             end
             "You might need to modify this function!"
             function compare_arguments_post(args_post_exp, arg_post)
-                arg_post_exp == arg_post
+                recursive_value_equality_check(arg_post_exp,arg_post)
             end
 
             data = load_object($data_output_filename)
