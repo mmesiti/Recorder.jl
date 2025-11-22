@@ -1,8 +1,5 @@
 # Recorder.jl
 
-**Disclaimer: This is almost my first Julia project,
-so do not take this as an example of good practices.**
-
 A library of utilities to conveniently record 
 the input and output of functions,
 to quickly create regression/approval/characterisation tests.
@@ -15,7 +12,7 @@ or at least tests that are useful in this regard.
 One might argue that such code *defines itself*,
 and if we so believe, 
 the correctness of a new version of the code 
-can be checked with regression tests 
+can be checked with characterisation tests 
 that check that, for given inputs, output and side effects 
 are the same as for the old code.
 
@@ -37,10 +34,10 @@ it is quite trivial to do the recording in Julia
 ## Examples 
 ### Basic usage
 
-Imagine you need to create a regression test for a function `func`
+You need to create a test for a function `func`
 which is called inside some julia code 
 *that you can temporarily modify*,
-and might be buried down a tall call stack
+and is buried down a tall call stack
 or called in a loop:
 
 
@@ -54,60 +51,88 @@ function deep_in_the_callstack_in_nested_loops_and_without_tests()
 end
 ```
 
-Then use `Recorder` and slap `@record` in front of the function call:
+In order to create a characterization test,
+follow the following steps:
 
-``` julia
-using Recorder
-using MyModule
+1. add a  `using Recorder` statement at the top of the file
 
-function deep_in_the_callstack_in_nested_loops_and_without_tests()
-    [...]
-    res = @record func(a,b,c)
-    [...]
-end
+   ```diff
+   + using Recorder
+     using MyModule
+   ...
+   ```
 
-```
+2. add `@record` in front of the function call you want to 
 
-This will make record the input arguments, 
-the output and the values of the arguments
-after the call.  
-If the instrumented code is in a package,
-you might also have to add `Recorder.jl` 
-to its dependencies. 
-It is advised to back up `Project.toml` and `Manifest.toml` 
-before doing that.
+   ``` diff
+   function deep_in_the_callstack_in_nested_loops_and_without_tests()
+       [...]
+   +    res = @record func(a,b,c)
+   -    res = func(a,b,c)
+       [...]
+   end
+   
+   ```
+   
+   This will make record the input arguments, 
+   the output and the values of the arguments
+   after the call.  
+3. If the instrumented code is in a package,
+   you might also have to add `Recorder.jl` 
+   to its dependencies.
+   To this aim:
+   1. Back up `Project.toml` and `Manifest.toml`
+      of the package 
+   2. Add the `Recorder` package to the depenencies
+      of the package.
 
-Then, with the function 
+4. Then, with the function 
 
-``` julia
-create_regression_tests("MyModule.func")
-```
+   ``` julia
+   create_regression_tests("MyModule.func")
+   ```
 
-a file can be created 
-that contains all the data for the regression test,
-plus a script that contains a `@testset` of "skeleton" regression tests
-based on that data.  
-The script will need to be modified 
-for readability and to define proper equality conditions
-between the real return values and the expected return values 
-and between the real output argument values 
-and the expected output argument values.
+   a file can be created 
+   that contains all the data for the regression test,
+   plus a script that contains a `@testset` of "skeleton" regression tests
+   based on that data.  
 
-In particular:
-- if the functions you are recording act on struct types, 
-  one might have to define their own equality operator,
-  for example
-  - to compare the structure fields by value (recursively)
-  - to provide better diagnostics for failing tests
-    (where is the difference?)
-  - to use `isapprox` instead of `==`
-- In the case of MPI ports:
-  - to add `MPI` initialization/finalization calls if necessary;
-  - to add scatter/gather steps for the input/output arguments if necessary;
+5. Check the scripts generated. 
+   Very likely, they will need to be modified 
+   for readability and to define proper equality conditions
+   between the real return values and the expected return values 
+   and between the real output argument values 
+   and the expected output argument values.
 
-After the regression tests have been created,
-you can remove all the references to `Recorder` from your code,
-and use the recorded data and the modified scripts in your test suite.
+   In particular:
+   - if the functions you are recording act on struct types, 
+     one might have to define their own equality operator,
+     for example
+     - to compare the structure fields by value (recursively)
+     - to provide better diagnostics for failing tests
+       (where is the difference?)
+     - to use `isapprox` instead of `==`
+   - In the case of MPI ports:
+     - to add `MPI` initialization/finalization calls if necessary;
+     - to add scatter/gather steps for the input/output arguments if necessary;
+
+6. Check the tests:
+   1. Check that the tests pass
+   2. Check that if you modify the function under test
+      the tests do not pass any more
+   3. Restore the original state of the function
+   
+7. After the regression tests have been created
+   and work as intended,
+   restore the source files of the package
+   to their original state.
+   
+8. Then recover the state of `Project.toml` 
+   and of the `Manifest.toml` as they were,
+   from the backup
+
+9. Verify that there is no mention of `Recorder`
+   in the project.
 
 
 ### Record selectively
