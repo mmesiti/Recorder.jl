@@ -1,28 +1,32 @@
 # Recorder.jl
 
 A library of utilities to conveniently record 
-the input and output of functions,
+the input and output of functions
+by instrumenting the code at the call point,
 to quickly create regression/approval/characterisation tests.
 
 ## Rationale
 
 Very often in my experience it happens that one needs to optimise,
-refactor or parallelise code that does not have any tests,
+refactor or parallelise a function that does not have any tests,
 or at least tests that are useful in this regard.
-One might argue that such code *defines itself*,
-and if we so believe, 
-the correctness of a new version of the code 
-can be checked with characterisation tests 
-that check that, for given inputs, output and side effects 
-are the same as for the old code.
 
-Creating such tests is quite tedious. 
-One possibility is to "instrument" the code 
-to record input, output 
-and side effects of the code we want to test
-while it is running
-(possibly only for a subset of the calls),
+If we believe that such a function
+*defines itself* with its code,
+characterisation tests 
+are probably the most effective way
+to get confidence about the correctness
+of a new version of the code:
+
+Creating such tests is typically quite tedious. 
+One possibility is 
+to "instrument" the call point of the function
+to record input, output and side effects 
+of the function 
+while the whole code is running
+(possibly only for a few the calls),
 and create a test harness based on these data.
+
 This requires a lot of boilerplate code for the recording
 and the serialization/deserialization 
 of the data.
@@ -43,63 +47,78 @@ or called in a loop:
 
 ```julia
 using MyModule
-
-function deep_in_the_callstack_in_nested_loops_and_without_tests()
-    [...]
-    res = func(a,b,c)
-    [...]
+...
+function caller()
+    ...
+    res = f_to_test(a,b,c)
+    ...
 end
+...
 ```
 
 In order to create a characterization test,
 follow the following steps:
 
-1. add a  `using Recorder` statement at the top of the file
+1. add a  `using Recorder` statement at the top of the file,
+   and a `@record` in front of the function call you want to record:
 
    ```diff
    + using Recorder
      using MyModule
-   ...
+     ...
+     function caller()
+       ...
+   -   res = f_to_test(a,b,c)
+   +   res = @record f_to_test(a,b,c)
+       ...
+     end
+     ...
    ```
-
-2. add `@record` in front of the function call you want to 
-
-   ``` diff
-   function deep_in_the_callstack_in_nested_loops_and_without_tests()
-       [...]
-   +    res = @record func(a,b,c)
-   -    res = func(a,b,c)
-       [...]
-   end
-   
-   ```
-   
-   This will make record the input arguments, 
    the output and the values of the arguments
-   after the call.  
-3. If the instrumented code is in a package,
+   after the call.
+   Consider recording the calls selectively (see below).
+2. If the instrumented code is in a package,
    you might also have to add `Recorder.jl` 
    to its dependencies.
    To this aim:
    1. Back up `Project.toml` and `Manifest.toml`
       of the package 
    2. Add the `Recorder` package to the depenencies
-      of the package.
+      of the package 
+      (you might have to add it as a dev dependency
+      until `Recorder.jl` is listed in a registry).
 
-4. Then, with the function 
+3. Execute the code containing the function to record
+4. In the same Julia session, run:
 
    ``` julia
-   create_regression_tests("MyModule.func")
+   using Recorder
+   create_regression_tests("MyModule.f_to_test")
    ```
 
-   a file can be created 
-   that contains all the data for the regression test,
-   plus a script that contains a `@testset` of "skeleton" regression tests
-   based on that data.  
+   and the following files will be created:
+   - a data archive for the regression test
+     with all the recorded data
+   - a script that contains a `@testset` of "skeleton" regression tests
+     based on that data.  
 
-5. Check the scripts generated. 
-   Very likely, they will need to be modified 
-   for readability and to define proper equality conditions
+4. Check the scripts generated,
+   in particular the functions provided
+   for equality check,
+   which are used to compare 
+   the real return values to the recorded return values,
+   and the real output values to the recorded output values.
+   
+   They should cover the most common cases,
+   when the objects to compare are
+   - plain variables
+   - mutable or immutable structs
+   - vectors in general
+   - vectors of numeric values (done with $\approx $ )
+   - a mix of the above
+
+   You might want to amend the generated scripts
+   for readability and to alter the equality conditions
    between the real return values and the expected return values 
    and between the real output argument values 
    and the expected output argument values.
@@ -107,8 +126,7 @@ follow the following steps:
    In particular:
    - if the functions you are recording act on struct types, 
      one might have to define their own equality operator,
-     for example
-     - to compare the structure fields by value (recursively)
+     for example:
      - to provide better diagnostics for failing tests
        (where is the difference?)
      - to use `isapprox` instead of `==`
@@ -116,24 +134,25 @@ follow the following steps:
      - to add `MPI` initialization/finalization calls if necessary;
      - to add scatter/gather steps for the input/output arguments if necessary;
 
-6. Check the tests:
+5. Run the genetated scripts (optionally amended):
    1. Check that the tests pass
    2. Check that if you modify the function under test
       the tests do not pass any more
    3. Restore the original state of the function
    
-7. After the regression tests have been created
+6. After the regression tests have been created
    and work as intended,
    restore the source files of the package
-   to their original state.
+   to their original state
+   before the instrumentation.
    
-8. Then recover the state of `Project.toml` 
-   and of the `Manifest.toml` as they were,
-   from the backup
+8. Then restore the state of `Project.toml` 
+   and of the `Manifest.toml` 
+   as they were before the instrumentation
+   from the backup.
 
 9. Verify that there is no mention of `Recorder`
    in the project.
-
 
 ### Record selectively
 In the case where the function we want to record 

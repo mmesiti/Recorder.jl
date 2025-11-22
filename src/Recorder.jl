@@ -1,6 +1,6 @@
 module Recorder
 using Base: remove_linenums!, nothing_sentinel
-export @record, create_regression_tests
+export @record, create_regression_tests, recursive_value_equality
 
 import JLD2
 
@@ -193,7 +193,7 @@ function record_arguments_post(key, args_output, state::State)
     push!(state.argumentss_post[key], args_output)
 end
 
-function clear(state::State = gs)
+function clear(state::State=gs)
     function cleardict!(d)
         for k in keys(d)
             delete!(d, k)
@@ -220,7 +220,7 @@ function increase_call_no(key, state::State)
     state.call_number[key] += 1
 end
 
-function create_regression_tests_data(key, tag, state::State = gs)
+function create_regression_tests_data(key, tag, state::State=gs)
     return_value = state.return_values[key]
     argument = state.argumentss[key]
     argument_post = state.argumentss_post[key]
@@ -243,30 +243,60 @@ _base_using_directives = quote
     using JLD2
 end
 
+recursive_value_equality_expr = quote
+    function recursive_value_equality(strA, strB)
+        strA == strB || (
+            typeof(strA) == typeof(strB) &&
+            if fieldnames(typeof(strA)) == ()
+                strA == strB
+            else
+                all(getfield(strA, field) == getfield(strB, field) ||
+                    recursive_value_equality(getfield(strA, field),
+                        getfield(strB, field))
+                    for field in fieldnames(typeof(strA))
+                )
+            end
+        )
+    end
+    function recursive_value_equality(strA::Vector, strB::Vector)
+        strA == strB || (
+            typeof(strA) == typeof(strB) &&
+            length(strA) == length(strB) &&
+            all(strA[i] == strB[i] ||
+                recursive_value_equality(strA[i],
+                strB[i])
+                for i in eachindex(strA))
+        )
+    end
+
+    function recursive_value_equality(strA::Vector{T}, strB::Vector{U}) where {T<:Number} where {U<:Number}
+        length(strA) == length(strB) &&
+            (strA ≈ strB ||
+             all(strA[i] ≈ strB[i] ||
+                 recursive_value_equality(strA[i],
+                strB[i])
+                 for i in eachindex(strA)))
+    end
+
+
+end
+
+eval(recursive_value_equality_expr)
+
+
+
 function testset_expr(func_name, data_output_filename)
     testsetname = "Tests for $func_name"
     quote
-        function recursive_value_equality_check(strA,strB)
-            typeof(strA) == typeof(strB) &&
-                if fieldnames(typeof(strA)) == ()
-                    strA == strB
-                else
-                    all( getfield(strA,field) == getfield(strB,field) ||
-                        recursive_value_equality_check(getfield(strA,field),
-                                                       getfield(strB,field))
-                         for field in fieldnames(typeof(strA))
-                             )
-                end
-        end
-
+        $recursive_value_equality_expr
         @testset verbose = true $testsetname begin
             "You might need to modify this function!"
             function compare_return_values(rvexp, rv)
-                recursive_value_equality_check(rvexp,rv)
+                recursive_value_equality(rvexp, rv)
             end
             "You might need to modify this function!"
             function compare_arguments_post(args_post_exp, arg_post)
-                recursive_value_equality_check(args_post_exp,arg_post)
+                recursive_value_equality(args_post_exp, arg_post)
             end
 
             data = load_object($data_output_filename)
@@ -314,16 +344,16 @@ function write_to_file(tag, text)
 end
 
 
-function create_regression_tests(key::String; tag = key, state::State = gs)
-    _create_regression_tests([key], tag = tag, state = state)
+function create_regression_tests(key::String; tag=key, state::State=gs)
+    _create_regression_tests([key], tag=tag, state=state)
 end
 
-function create_regression_tests(; tag, state::State = gs)
+function create_regression_tests(; tag, state::State=gs)
     all_keys = [k for k in keys(state.return_values)]
-    _create_regression_tests(all_keys, tag = tag, state = state)
+    _create_regression_tests(all_keys, tag=tag, state=state)
 end
 
-function _create_regression_tests(all_keys::Vector{String}; tag, state::State = gs)
+function _create_regression_tests(all_keys::Vector{String}; tag, state::State=gs)
 
     func_names = [split(key, ".")[end] for key in all_keys]
 

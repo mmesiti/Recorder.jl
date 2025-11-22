@@ -162,8 +162,8 @@ using .TestModule
     """
     function setup_cleanup(test::Function, tag::String)
         function clean_filesystem()
-            rm("regression_tests_$tag.data", force = true)
-            rm("regression_tests_$tag.jl", force = true)
+            rm("regression_tests_$tag.data", force=true)
+            rm("regression_tests_$tag.jl", force=true)
         end
 
         Recorder.clear()
@@ -227,7 +227,7 @@ using .TestModule
                 @record mystate identity(5)
                 @record mystate identity("hello")
                 @record mystate identity(["hello", 7])
-                create_regression_tests("Base.identity", state = mystate)
+                create_regression_tests("Base.identity", state=mystate)
                 data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5, "hello", ["hello", 7]] &&
                     data["arguments"] == [[5], ["hello"], [["hello", 7]]] &&
@@ -268,7 +268,7 @@ using .TestModule
             setup_cleanup("A_Tag") do
                 @record identity(5)
                 @record identity("hello")
-                create_regression_tests("Base.identity", tag = "A_Tag")
+                create_regression_tests("Base.identity", tag="A_Tag")
                 "regression_tests_A_Tag.jl" in readdir()
             end
         end
@@ -278,7 +278,7 @@ using .TestModule
         text = setup_cleanup("A_Tag") do
             @record identity(5)
             @record identity("hello")
-            create_regression_tests("Base.identity", tag = "A_Tag")
+            create_regression_tests("Base.identity", tag="A_Tag")
         end
 
         @test contains(text, "using Base") # Module containing the identity function
@@ -306,9 +306,9 @@ using .TestModule
         end
         function clean_filesystem()
             for tag in tagsdata
-                rm("regression_tests_$tag.data", force = true)
+                rm("regression_tests_$tag.data", force=true)
             end
-            rm("regression_tests_$tagjl.jl", force = true)
+            rm("regression_tests_$tagjl.jl", force=true)
         end
 
         clean_filesystem()
@@ -327,7 +327,7 @@ using .TestModule
             mystate = Recorder.State()
             @record mystate identity(5)
             @record mystate f3arg(4, 5, 6)
-            create_regression_tests(state = mystate, tag = "A_Tag")
+            create_regression_tests(state=mystate, tag="A_Tag")
         end
 
         @test count("using Test\n", text) == 1
@@ -352,7 +352,7 @@ using .TestModule
             @record mystate func1(a, b, c)
             @record mystate func2(a, b, c)
 
-            text = create_regression_tests(state = mystate, tag = "batch-1")
+            text = create_regression_tests(state=mystate, tag="batch-1")
             @test "regression_tests_batch-1.jl" in readdir()
             @test "regression_tests_batch-1-func1.data" in readdir()
             @test "regression_tests_batch-1-func2.data" in readdir()
@@ -361,5 +361,134 @@ using .TestModule
 
         @test contains(text, "Tests for func1")
         @test contains(text, "Tests for func2")
+    end
+
+    @testset verbose = true "check recursive equality " begin
+
+
+        @testset verbose = true "value checks" begin
+            @test recursive_value_equality(1, 1)
+            @test !recursive_value_equality(1, 2)
+        end
+
+        @testset verbose = true "immutable structure checks" begin
+            # naive_equality(A,B) = all( getfield(A) )
+            struct S1
+                a::Int
+                b::Int
+            end
+
+            @test recursive_value_equality(S1(1, 2), S1(1, 2))
+            @test !recursive_value_equality(S1(1, 2), S1(1, 3))
+
+
+            struct S2
+                a::Int
+                b::Vector{Int64}
+            end
+
+            @test recursive_value_equality(S2(1, [2,3]), S2(1, [2,3]))
+            @test ! recursive_value_equality(S2(1, [2,4]), S2(1, [2,3]))
+
+            struct S3
+                a::S1
+                b::S2
+                c::Int64
+            end
+
+            @test recursive_value_equality(
+            S3(S1(1,2), S2(1, [2,3]), 45),
+            S3(S1(1,2), S2(1, [2,3]), 45))
+
+            @test !recursive_value_equality(
+            S3(S1(1,12), S2(1, [2,3]), 45),
+            S3(S1(1,2), S2(1, [2,3]), 45))
+
+            @test !recursive_value_equality(
+            S3(S1(1,2), S2(1, [2,3]), 45),
+            S3(S1(1,2), S2(1, [1,3]), 45))
+
+            @test !recursive_value_equality(
+            S3(S1(1,2), S2(1, [2,3]), 45),
+            S3(S1(1,2), S2(1, [1,3]), 46))
+
+        end
+
+        @testset verbose = true "mutable structure checks" begin
+            # naive_equality(A,B) = all( getfield(A) )
+            mutable struct S1m
+                a::Int
+                b::Int
+            end
+
+            @test recursive_value_equality(S1m(1, 2), S1m(1, 2))
+            @test !recursive_value_equality(S1m(1, 2), S1m(1, 3))
+
+
+            mutable struct S2m
+                a::Int
+                b::Vector{Int64}
+            end
+
+            @test recursive_value_equality(S2m(1, [2,3]), S2m(1, [2,3]))
+            @test ! recursive_value_equality(S2m(1, [2,4]), S2m(1, [2,3]))
+
+            mutable struct S3m
+                a::S1m
+                b::S2m
+                c::Int64
+            end
+
+            @test recursive_value_equality(
+            S3m(S1m(1,2), S2m(1, [2,3]), 45),
+            S3m(S1m(1,2), S2m(1, [2,3]), 45))
+
+            @test !recursive_value_equality(
+            S3m(S1m(1,12), S2m(1, [2,3]), 45),
+            S3m(S1m(1,2), S2m(1, [2,3]), 45))
+
+            @test !recursive_value_equality(
+            S3m(S1m(1,2), S2m(1, [2,3]), 45),
+            S3m(S1m(1,2), S2m(1, [1,3]), 45))
+
+            @test !recursive_value_equality(
+            S3m(S1m(1,2), S2m(1, [2,3]), 45),
+            S3m(S1m(1,2), S2m(1, [1,3]), 46))
+
+        end
+
+
+        @testset verbose = true "vector checks" begin
+            # naive_equality(v1,v2) = all(naive_equality(a,b) for (a,b) in zip(v1,v2))
+
+            @test recursive_value_equality([1,3,"hello"],[1,3,"hello"])
+            @test ! recursive_value_equality([1,3,"hello"],[1,3,"hellu"])
+
+            @test recursive_value_equality([1,3,[1,2,3]],[1,3,[1,2,3]])
+            @test ! recursive_value_equality([1,3,[1,3]],[1,3,[1,2,3]])
+
+            @test recursive_value_equality([1,S1(2,3),[1,2,3]],[1,S1(2,3),[1,2,3]])
+            @test ! recursive_value_equality([1,S1(2,3),[1,2,3]],[1,S1(1,3),[1,2,3]])
+
+            @test recursive_value_equality([1,S2(2,[3,3]),[1,2,3]],
+                                                 [1,S2(2,[3,3]),[1,2,3]])
+
+            @test ! recursive_value_equality([1,S2(2,[3,3]),[1,2,3]],
+                                                 [1,S2(2,[4,3]),[1,2,3]])
+
+            end
+        @testset verbose = true "vector checks, floating point" begin
+
+            v = [1.0,2.0,3.0]
+            w = Vector(v)
+            v[3] += 1.0e-14
+            @test recursive_value_equality(v,w)
+
+            v = [1,2,3]
+            w = [1.0,2.0,3.0]
+            w[3] += 1.0e-14
+            @test recursive_value_equality(v,w)
+ 
+            end
     end
 end
