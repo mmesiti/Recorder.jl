@@ -266,7 +266,7 @@ function testset_expr(func_name, data_output_filename)
             end
             "You might need to modify this function!"
             function compare_arguments_post(args_post_exp, arg_post)
-                recursive_value_equality_check(arg_post_exp,arg_post)
+                recursive_value_equality_check(args_post_exp,arg_post)
             end
 
             data = load_object($data_output_filename)
