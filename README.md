@@ -46,7 +46,7 @@ or called in a loop:
 
 
 ```julia
-using MyModule
+using MyModule # exports f_to_test
 ...
 function caller()
     ...
@@ -59,12 +59,12 @@ end
 In order to create a characterization test,
 follow the following steps:
 
-1. add a  `using Recorder` statement at the top of the file,
+1. add a `using Recorder` statement at the top of the file,
    and a `@record` in front of the function call you want to record:
 
    ```diff
    + using Recorder
-     using MyModule
+     using MyModule # exports f_to_test
      ...
      function caller()
        ...
@@ -161,17 +161,18 @@ the input/output of  all `@record`ed call to `func`
 will all be saved. This might be expensive. 
 To record only some calls, we can specify a range:
 
-``` julia
-using Recorder
-using MyModule
-
-function deep_in_the_callstack_in_nested_loops_and_without_tests()
-    [...]
-    res = @record 13:2:17 func(a,b,c)
-    [...]
-end
+```diff
++ using Recorder
+  using MyModule # exports f_to_test
+  ...
+  function caller()
+    ...
+-   res = f_to_test(a,b,c)
++   res = @record 13:2:17 f_to_test(a,b,c)
+    ...
+  end
+  ...
 ```
-
 In this case, `@record` will keep track 
 of how many times we have called the function,
 and record only the calls in the range
@@ -184,10 +185,11 @@ where all the calls will be stored,
 Instead of using the global state inside the Recorder module:
 ``` julia
 using Recorder
-using MyModule
+using MyModule # exports func1 and func2
 
 mystate = Recorder.State()
 res = @record mystate 13:2:17 func1(a,b,c)
+res = @record mystate 13:2:17 func2(a,b,c)
 ```
 
 Then, it will be possible to create 
@@ -199,9 +201,10 @@ create_regression_test(state=mystate,tag="batch-1")
 ```
 which will create 
 the `regression_tests_batch-1.jl`,
-the `regression_tests_batch-1-func1.data` 
-and the `regression_tests_batch-1-func2.data` 
+the `regression_tests_batch-1-MyModule.func1.data` 
+and the `regression_tests_batch-1-MyModule.func2.data` 
 files.
+
 In `regression_tests_batch-1.jl`,
 a different `@testset` will be created for each function.
 
@@ -220,18 +223,16 @@ This can be useful to group tests into different logically separate scenarios.
   - When using separate test environment, activate it: `julia --project=test-utils script.jl`
   - Remember to remove Recorder from production dependencies after generating tests
 
-
-
-
 ## Possible features
   - [X] records input arguments, even for multiple calls
   - [X] records output values, even for multiple calls
   - [X] records values of arguments after call, even for multiple calls
   - [X] deals with functions called multiple times, 
         recording only a selected number of calls
+  - [X] automatic value-based comparisons (many cases covered, possibly all)
   - [X] creates automagically code and data for regression test cases
         based on the recording
-    - [ ] and the code created works out of the box (getting close)
+    - [ ] and the code created works out of the box (getting very close)
   - [X] store state in and create regression tests from a user-defined object 
     - [ ] make it possible to use expressions for the state object
           (e.g., `mystates["first-batch"]`)
@@ -247,7 +248,6 @@ This can be useful to group tests into different logically separate scenarios.
   - [ ] make it possible to "disable" `@record` (maybe with an environment variable?)
         so that it can be left in the code without causing issues.
   - [ ] `create_regression_tests` should error if the files are already there
-  - [ ] automatic value-based comparisons
  
   If you are interested in any of these or more, 
   please open an issue and start the discussion.

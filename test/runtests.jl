@@ -10,7 +10,7 @@ eval(Recorder.recursive_value_equality_expr)
 @testset verbose = true "Recorder Tests..." begin
     @testset "The recorded function returns the same value" begin
         @test @record identity(6.5) == identity(6.5)
-        @test @record f3arg(4, 5, 6) == f3arg(4, 5, 6)
+        @test @record TestModule.f3arg(4, 5, 6) == TestModule.f3arg(4, 5, 6)
         @test @record TestModule1.f(4, 5, 6) == TestModule1.f(4, 5, 6)
     end
 
@@ -18,31 +18,31 @@ eval(Recorder.recursive_value_equality_expr)
     @testset "Return Value is recorded and can be retrieved with Recorder.gs.return_values" begin
         @test begin
             Recorder.clear()
-            @record f3arg(4, 5, 6)
-            Recorder.gs.return_values["TestModule.f3arg"] |> last == f3arg(4, 5, 6)
+            @record TestModule.f3arg(4, 5, 6)
+            Recorder.gs.return_values[TestModule.f3arg] |> last == TestModule.f3arg(4, 5, 6)
         end
         @test begin
             Recorder.clear()
             @record TestModule1.f(4, 5, 6)
-            Recorder.gs.return_values["TestModule1.f"] |> last == TestModule1.f(4, 5, 6)
+            Recorder.gs.return_values[TestModule1.f] |> last == TestModule1.f(4, 5, 6)
         end
     end
 
-    @testset "Arguments are recorded and can be retrieved with Recorder.gs.argumentss" begin
+     @testset "Arguments are recorded and can be retrieved with Recorder.gs.argumentss" begin
         @test begin
             Recorder.clear()
-            @record f3arg(4, 5, 6)
-            Recorder.gs.argumentss["TestModule.f3arg"] |> last == [4, 5, 6]
+            @record TestModule.f3arg(4, 5, 6)
+            Recorder.gs.argumentss[TestModule.f3arg] |> last == [4, 5, 6]
         end
         @test begin
             Recorder.clear()
             @record TestModule1.f(4, 5, 6)
-            Recorder.gs.argumentss["TestModule1.f"] |> last == [4, 5, 6]
+            Recorder.gs.argumentss[TestModule1.f] |> last == [4, 5, 6]
         end
         @test begin
             Recorder.clear()
             @record TestModule1.SubMod11.f(4, 5, 6)
-            Recorder.gs.argumentss["TestModule1.SubMod11.f"] |> last == [4, 5, 6]
+            Recorder.gs.argumentss[TestModule1.SubMod11.f] |> last == [4, 5, 6]
         end
     end
 
@@ -52,8 +52,8 @@ eval(Recorder.recursive_value_equality_expr)
             v = [1, 2, 3]
             Recorder.clear()
             @record push!(v, 4)
-            Recorder.gs.argumentss["Base.push!"] |> last == [[1, 2, 3], 4] &&
-                Recorder.gs.argumentss_post["Base.push!"] |> last == [[1, 2, 3, 4], 4]
+            Recorder.gs.argumentss[Base.push!] |> last == [[1, 2, 3], 4] &&
+                Recorder.gs.argumentss_post[Base.push!] |> last == [[1, 2, 3, 4], 4]
         end
     end
 
@@ -87,7 +87,7 @@ eval(Recorder.recursive_value_equality_expr)
             for i = 1:10
                 @record identity(i)
             end
-            Recorder.gs.call_number["Base.identity"] == 10
+            Recorder.gs.call_number[Base.identity] == 10
         end
     end
 
@@ -98,7 +98,7 @@ eval(Recorder.recursive_value_equality_expr)
                 @record 3:2:7 identity(i)
             end
             try
-                Recorder.gs.argumentss["Base.identity"] == [[3], [5], [7]]
+                Recorder.gs.argumentss[Base.identity] == [[3], [5], [7]]
             catch
                 println(Recorder.gs.return_values)
                 false
@@ -124,7 +124,7 @@ eval(Recorder.recursive_value_equality_expr)
             mystate = Recorder.State()
             @record mystate identity(50)
             Recorder.gs.argumentss == Dict() &&
-                mystate.argumentss["Base.identity"] == [[50]]
+                mystate.argumentss[Base.identity] == [[50]]
         end
     end
 
@@ -137,7 +137,7 @@ eval(Recorder.recursive_value_equality_expr)
             end
             try
                 Recorder.gs.argumentss == Dict() &&
-                    mystate.argumentss["Base.identity"] == [[3], [5], [7]]
+                    mystate.argumentss[Base.identity] == [[3], [5], [7]]
             catch
                 println(Recorder.gs.return_values)
                 println(mystate.return_values)
@@ -151,7 +151,7 @@ eval(Recorder.recursive_value_equality_expr)
         for i = 1:10
             @record mystate 3:2:7 identity(i)
         end
-        @test length(mystate.argumentss["Base.identity"]) == 3
+        @test length(mystate.argumentss[Base.identity]) == 3
         Recorder.clear(mystate)
         @test length(mystate.argumentss) == 0
     end
@@ -174,7 +174,8 @@ eval(Recorder.recursive_value_equality_expr)
             @test "regression_tests_$tag.data" in readdir()
             @test "regression_tests_$tag.jl" in readdir()
             r
-        catch
+        catch e
+            rethrow(e)
             false
         finally
             clean_filesystem()
@@ -186,9 +187,10 @@ eval(Recorder.recursive_value_equality_expr)
             setup_cleanup("Base.identity") do
                 @record identity(5)
                 try
-                    create_regression_tests("Base.identity")
-                catch
+                    create_regression_tests(Base.identity)
+                catch e
                     println(Recorder.gs.return_values)
+                    rethrow(e)
                     false
                 else
                     "regression_tests_Base.identity.data" in readdir()
@@ -198,7 +200,7 @@ eval(Recorder.recursive_value_equality_expr)
         @test begin
             setup_cleanup("Base.identity") do
                 @record identity(5)
-                create_regression_tests("Base.identity")
+                create_regression_tests(Base.identity)
                 data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5] &&
                     data["arguments"] == [[5]] &&
@@ -211,7 +213,7 @@ eval(Recorder.recursive_value_equality_expr)
                 @record identity(5)
                 @record identity("hello")
                 @record identity(["hello", 7])
-                create_regression_tests("Base.identity")
+                create_regression_tests(Base.identity)
                 data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5, "hello", ["hello", 7]] &&
                     data["arguments"] == [[5], ["hello"], [["hello", 7]]] &&
@@ -228,7 +230,7 @@ eval(Recorder.recursive_value_equality_expr)
                 @record mystate identity(5)
                 @record mystate identity("hello")
                 @record mystate identity(["hello", 7])
-                create_regression_tests("Base.identity", state=mystate)
+                create_regression_tests(Base.identity, state=mystate)
                 data = load_object("regression_tests_Base.identity.data")
                 data["return_value"] == [5, "hello", ["hello", 7]] &&
                     data["arguments"] == [[5], ["hello"], [["hello", 7]]] &&
@@ -242,7 +244,7 @@ eval(Recorder.recursive_value_equality_expr)
             setup_cleanup("Base.identity") do
                 @record identity(5)
                 @record identity("hello")
-                create_regression_tests("Base.identity")
+                create_regression_tests(Base.identity)
                 "regression_tests_Base.identity.jl" in readdir()
             end
         end
@@ -251,7 +253,7 @@ eval(Recorder.recursive_value_equality_expr)
             setup_cleanup("Base.identity") do
                 @record identity(5)
                 @record identity("hello")
-                expr = create_regression_tests("Base.identity")
+                expr = create_regression_tests(Base.identity)
                 io = IOBuffer()
                 print(io, expr)
                 filestring = String(take!(io))
@@ -269,7 +271,7 @@ eval(Recorder.recursive_value_equality_expr)
             setup_cleanup("A_Tag") do
                 @record identity(5)
                 @record identity("hello")
-                create_regression_tests("Base.identity", tag="A_Tag")
+                create_regression_tests(Base.identity, tag="A_Tag")
                 "regression_tests_A_Tag.jl" in readdir()
             end
         end
@@ -279,7 +281,7 @@ eval(Recorder.recursive_value_equality_expr)
         text = setup_cleanup("A_Tag") do
             @record identity(5)
             @record identity("hello")
-            _, text = create_regression_tests("Base.identity", tag="A_Tag")
+            _, text = create_regression_tests(Base.identity, tag="A_Tag")
             text 
         end
 
@@ -326,10 +328,10 @@ eval(Recorder.recursive_value_equality_expr)
         end
     end
     @testset verbose = true "create_regression_test works without key" begin
-        text = setup_cleanup_nokey("A_Tag", "A_Tag-f3arg", "A_Tag-identity") do
+        text = setup_cleanup_nokey("A_Tag", "A_Tag-Main.TestModule.f3arg", "A_Tag-Base.identity") do
             mystate = Recorder.State()
             @record mystate identity(5)
-            @record mystate f3arg(4, 5, 6)
+            @record mystate TestModule.f3arg(4, 5, 6)
             _, text = create_regression_tests(state=mystate, tag="A_Tag")
             text
         end
@@ -337,34 +339,34 @@ eval(Recorder.recursive_value_equality_expr)
         @test count("using Test\n", text) == 1
         @test count("using JLD2", text) == 1
         @test count("using Base", text) == 1 # Module containing the identity function
-        @test count("using TestModule", text) == 1
+        @test count("using Main.TestModule", text) == 1
 
         @test count("@testset", text) == 2 * 2 # Inner and outer
         @test count("@test ", text) == 2
         @test count("function compare_return_values", text) == 2
         @test count("function compare_arguments_post", text) == 2
-        @test contains(text, "Tests for TestModule.f3arg")
+        @test contains(text, "Tests for Main.TestModule.f3arg")
         @test contains(text, "Tests for Base.identity")
     end
 
 
     @testset verbose = true "create_regression_test works by README.md example" begin
-        text = setup_cleanup_nokey("batch-1", "batch-1-func1", "batch-1-func2") do
+        text = setup_cleanup_nokey("batch-1", "batch-1-Main.TestModule.func1", "batch-1-Main.TestModule.func2") do
             a, b, c = 3, 4, 5
 
             mystate = Recorder.State()
-            @record mystate func1(a, b, c)
-            @record mystate func2(a, b, c)
+            @record mystate TestModule.func1(a, b, c)
+            @record mystate TestModule.func2(a, b, c)
 
             _, text = create_regression_tests(state=mystate, tag="batch-1")
             @test "regression_tests_batch-1.jl" in readdir()
-            @test "regression_tests_batch-1-func1.data" in readdir()
-            @test "regression_tests_batch-1-func2.data" in readdir()
+            @test "regression_tests_batch-1-Main.TestModule.func1.data" in readdir()
+            @test "regression_tests_batch-1-Main.TestModule.func2.data" in readdir()
             text
         end
 
-        @test contains(text, "Tests for func1")
-        @test contains(text, "Tests for func2")
+        @test contains(text, "Tests for Main.TestModule.func1")
+        @test contains(text, "Tests for Main.TestModule.func2")
     end
 
     @testset verbose = true "check recursive equality " begin
