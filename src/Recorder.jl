@@ -308,7 +308,7 @@ function testset_expr(full_func_name, data_output_filename)
                 arguments_post = data["arguments_post"][i]
                 @test compare_return_values(
                     return_value,
-                    full_func_name(arguments...),
+                    $full_func_name(arguments...),
                 ) && compare_arguments_post(arguments, arguments_post)
             end
         end
