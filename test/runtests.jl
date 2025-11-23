@@ -5,6 +5,7 @@ include("TestModules.jl")
 
 using .TestModule
 
+eval(Recorder.recursive_value_equality_expr)
 
 @testset verbose = true "Recorder Tests..." begin
     @testset "The recorded function returns the same value" begin
@@ -278,8 +279,10 @@ using .TestModule
         text = setup_cleanup("A_Tag") do
             @record identity(5)
             @record identity("hello")
-            create_regression_tests("Base.identity", tag="A_Tag")
+            _, text = create_regression_tests("Base.identity", tag="A_Tag")
+            text 
         end
+
 
         @test contains(text, "using Base") # Module containing the identity function
         @test contains(text, "using Test")
@@ -327,7 +330,8 @@ using .TestModule
             mystate = Recorder.State()
             @record mystate identity(5)
             @record mystate f3arg(4, 5, 6)
-            create_regression_tests(state=mystate, tag="A_Tag")
+            _, text = create_regression_tests(state=mystate, tag="A_Tag")
+            text
         end
 
         @test count("using Test\n", text) == 1
@@ -339,8 +343,8 @@ using .TestModule
         @test count("@test ", text) == 2
         @test count("function compare_return_values", text) == 2
         @test count("function compare_arguments_post", text) == 2
-        @test contains(text, "Tests for f3arg")
-        @test contains(text, "Tests for identity")
+        @test contains(text, "Tests for TestModule.f3arg")
+        @test contains(text, "Tests for Base.identity")
     end
 
 
@@ -352,7 +356,7 @@ using .TestModule
             @record mystate func1(a, b, c)
             @record mystate func2(a, b, c)
 
-            text = create_regression_tests(state=mystate, tag="batch-1")
+            _, text = create_regression_tests(state=mystate, tag="batch-1")
             @test "regression_tests_batch-1.jl" in readdir()
             @test "regression_tests_batch-1-func1.data" in readdir()
             @test "regression_tests_batch-1-func2.data" in readdir()

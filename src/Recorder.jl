@@ -2,7 +2,9 @@ module Recorder
 using Base: remove_linenums!, nothing_sentinel
 export @record, create_regression_tests, recursive_value_equality
 
+
 import JLD2
+using JuliaFormatter
 
 struct State
     return_values::Dict{String,Vector{Any}}
@@ -281,14 +283,12 @@ recursive_value_equality_expr = quote
 
 end
 
-eval(recursive_value_equality_expr)
 
 
 
-function testset_expr(func_name, data_output_filename)
-    testsetname = "Tests for $func_name"
+function testset_expr(full_func_name, data_output_filename)
+    testsetname = "Tests for $full_func_name"
     quote
-        $recursive_value_equality_expr
         @testset verbose = true $testsetname begin
             "You might need to modify this function!"
             function compare_return_values(rvexp, rv)
@@ -299,14 +299,14 @@ function testset_expr(func_name, data_output_filename)
                 recursive_value_equality(args_post_exp, arg_post)
             end
 
-            data = load_object($data_output_filename)
+            data = load_object(joinpath(@__DIR__,$data_output_filename))
             @testset for i = 1:length(data["return_value"])
                 return_value = data["return_value"][i]
                 arguments = data["arguments"][i]
                 arguments_post = data["arguments_post"][i]
                 @test compare_return_values(
                     return_value,
-                    $(Symbol(func_name))(arguments...),
+                    $(Meta.parse(full_func_name))(arguments...),
                 ) && compare_arguments_post(arguments, arguments_post)
             end
         end
@@ -318,7 +318,7 @@ function mod_hierarchy_str(key)
     "$modhierarchstr"
 end
 
-function create_text(filecontentexpr, modhierarchstrs...)
+function create_text(filecontentexpr, modhierarchstrs...)::String
     sbuffer = IOBuffer()
 
     for modhierarchstr in modhierarchstrs
@@ -337,10 +337,12 @@ function create_text(filecontentexpr, modhierarchstrs...)
 end
 
 function write_to_file(tag, text)
-    script_filename = "regression_tests_$tag.jl" # DEBUG
+    script_filename = "regression_tests_$tag.jl" 
     script_file = open(script_filename, "w")
     write(script_file, text)
     close(script_file)
+    format(script_filename)
+    script_filename
 end
 
 
@@ -355,7 +357,7 @@ end
 
 function _create_regression_tests(all_keys::Vector{String}; tag, state::State=gs)
 
-    func_names = [split(key, ".")[end] for key in all_keys]
+    short_func_names = [split(key, ".")[end] for key in all_keys]
 
     function get_ns(tag, func_name)
         if length(all_keys) == 1
@@ -367,23 +369,23 @@ function _create_regression_tests(all_keys::Vector{String}; tag, state::State=gs
 
     data_output_filenames = [
         create_regression_tests_data(key, get_ns(tag, func_name), state) for
-        (key, func_name) in zip(all_keys, func_names)
+        (key, func_name) in zip(all_keys, short_func_names)
     ]
-
 
     filecontentexpr = quote end
     append!(
         filecontentexpr.args,
         _base_using_directives.args,
+        recursive_value_equality_expr.args,
         [
-            testset_expr(func_name, data_output_filename).args for
-            (func_name, data_output_filename) in zip(func_names, data_output_filenames)
+            testset_expr(full_func_name, data_output_filename).args for
+            (full_func_name, data_output_filename) in zip(all_keys, data_output_filenames)
         ]...,
     )
 
     text = create_text(filecontentexpr, [mod_hierarchy_str(k) for k in all_keys]...)
-    write_to_file(tag, text)
-    text
+    script_filename = write_to_file(tag, text)
+    script_filename, text
 end
 
 
