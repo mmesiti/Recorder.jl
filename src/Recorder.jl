@@ -7,10 +7,10 @@ import JLD2
 using JuliaFormatter
 
 struct State
-    return_values::Dict{String,Vector{Any}}
-    argumentss::Dict{String,Vector{Any}}
-    argumentss_post::Dict{String,Vector{Any}}
-    call_number::Dict{String,Int32}
+    return_values::Dict{Function,Vector{Any}}
+    argumentss::Dict{Function,Vector{Any}}
+    argumentss_post::Dict{Function,Vector{Any}}
+    call_number::Dict{Function,Int32}
 end
 
 State() = State(Dict(), Dict(), Dict(), Dict())
@@ -29,13 +29,15 @@ function _add_getkey!(output::Expr, input::Expr)
     push!(output.args, :(method = which($(esc(input.args[1])), argtypes)))
     push!(output.args, :(module_implementing = method.module))
     push!(output.args, :(name = method.name))
+    push!(output.args, :(_func = $(esc(input.args[1]))))
     push!(
         output.args,
         :(
-            key = replace(
-                string(module_implementing) * "." * string(name),
-                r"^Main\." => s"",
-            )
+            key = _func
+            # key = replace(
+            #     string(module_implementing) * "." * string(name),
+            #     r"^Main\." => s"",
+            # )
         ),
     )
 end
@@ -306,16 +308,15 @@ function testset_expr(full_func_name, data_output_filename)
                 arguments_post = data["arguments_post"][i]
                 @test compare_return_values(
                     return_value,
-                    $(Meta.parse(full_func_name))(arguments...),
+                    full_func_name(arguments...),
                 ) && compare_arguments_post(arguments, arguments_post)
             end
         end
     end
 end
 
-function mod_hierarchy_str(key)
-    modhierarchstr = join(split(key, ".")[1:end-1], ".")
-    "$modhierarchstr"
+function mod_hierarchy_str(func)
+    methods(func)[1].module
 end
 
 function create_text(filecontentexpr, modhierarchstrs...)::String
@@ -346,7 +347,7 @@ function write_to_file(tag, text)
 end
 
 
-function create_regression_tests(key::String; tag=key, state::State=gs)
+function create_regression_tests(key::Function; tag=key, state::State=gs)
     _create_regression_tests([key], tag=tag, state=state)
 end
 
@@ -355,9 +356,10 @@ function create_regression_tests(; tag, state::State=gs)
     _create_regression_tests(all_keys, tag=tag, state=state)
 end
 
-function _create_regression_tests(all_keys::Vector{String}; tag, state::State=gs)
+function _create_regression_tests(all_keys::Vector; tag, state::State=gs)::Tuple{String,String}
 
-    short_func_names = [split(key, ".")[end] for key in all_keys]
+    func_names = [ begin m = methods(key)[1]
+                      "$(m.module).$(m.name)" end for key in all_keys ]
 
     function get_ns(tag, func_name)
         if length(all_keys) == 1
@@ -369,7 +371,7 @@ function _create_regression_tests(all_keys::Vector{String}; tag, state::State=gs
 
     data_output_filenames = [
         create_regression_tests_data(key, get_ns(tag, func_name), state) for
-        (key, func_name) in zip(all_keys, short_func_names)
+        (key, func_name) in zip(all_keys, func_names)
     ]
 
     filecontentexpr = quote end
